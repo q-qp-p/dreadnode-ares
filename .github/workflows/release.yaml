@@ -111,9 +111,15 @@ jobs:
           merge-multiple: true
 
       - name: Generate checksums
+        id: checksums
         working-directory: artifacts
         run: |
           cat ./*.sha256 | sort > checksums.txt
+          {
+            echo "checksums<<EOF"
+            cat checksums.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate changelog
         id: changelog
@@ -146,7 +152,7 @@ jobs:
             ## Checksums
 
             ```
-            $(cat artifacts/checksums.txt)
+            ${{ steps.checksums.outputs.checksums }}
             ```
           files: |
             artifacts/*.tar.gz
