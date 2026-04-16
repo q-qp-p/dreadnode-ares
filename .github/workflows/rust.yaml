@@ -10,18 +10,18 @@ on:
       - synchronize
       - reopened
     paths:
-      - "ares-*/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/rust.yaml"
+      - 'ares-*/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust.yaml'
   push:
     branches:
       - main
     paths:
-      - "ares-*/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/rust.yaml"
+      - 'ares-*/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/rust.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -56,9 +56,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-check-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-check-${{ github.ref }}-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-check-
+            ${{ runner.os }}-cargo-check-${{ github.ref }}-
+            ${{ runner.os }}-cargo-check-refs/heads/main-
 
       - name: Run cargo check
         run: cargo check --workspace
@@ -81,9 +82,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-test-${{ github.ref }}-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-test-
+            ${{ runner.os }}-cargo-test-${{ github.ref }}-
+            ${{ runner.os }}-cargo-test-refs/heads/main-
 
       - name: Run tests
         run: cargo test --workspace
@@ -134,9 +136,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-clippy-${{ github.ref }}-${{ hashFiles('Cargo.lock', 'Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-clippy-
+            ${{ runner.os }}-cargo-clippy-${{ github.ref }}-
+            ${{ runner.os }}-cargo-clippy-refs/heads/main-
 
       - name: Run clippy
         run: cargo clippy --workspace -- -D warnings
