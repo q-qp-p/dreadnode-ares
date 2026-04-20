@@ -108,7 +108,7 @@ checksum = "03918c3dbd7701a85c6b9887732e2921175f26c350b4563841d0958c21d57e6d"
 
 [[package]]
 name = "ares-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ares-core",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "ares-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "ares-llm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ares-core",
@@ -183,7 +183,7 @@ dependencies = [
 
 [[package]]
 name = "ares-tools"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "approx",
