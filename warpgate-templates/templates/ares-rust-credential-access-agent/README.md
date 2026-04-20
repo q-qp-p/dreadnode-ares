@@ -1,10 +1,9 @@
-# Ares Recon Agent Warp Gate Template
+# Ares Rust Credential Access Agent Warp Gate Template
 
-This template builds **Ares Recon Agent** images using Warp Gate. It supports
+This template builds **Ares Rust Credential Access Agent** images using Warp Gate. It supports
 building **Docker images** (for `amd64` and `arm64`). The build provisions
-comprehensive network reconnaissance and Active Directory enumeration tools
-using Ansible roles from the nimbus_range collection, plus a compiled Rust
-worker binary with embedded Python.
+Kerberos attack tools and credential dumping utilities using Ansible roles from the nimbus_range
+collection, plus a compiled Rust worker binary with embedded Python.
 
 ---
 
@@ -25,7 +24,7 @@ worker binary with embedded Python.
 
 The template configuration is managed in `warpgate.yaml`. Key settings include:
 
-- `name`: Template name (`ares-recon-agent`)
+- `name`: Template name (`ares-rust-credential-access-agent`)
 - `base.image`: Base Docker image (ares-base)
 - `sources`: Clones the ares repository for Rust compilation
 - `provisioners`: Shell, Ansible, and file provisioners for setup
@@ -40,24 +39,24 @@ Environment variables required:
 
 ## Building Docker Images
 
-This builds **Ares Recon Agent** Docker images for `amd64` and `arm64`architectures, installs prerequisites, provisions using Ansible roles, and
+This builds **Ares Rust Credential Access Agent** Docker images for `amd64` and `arm64`architectures, installs prerequisites, provisions using Ansible roles, and
 compiles the Rust worker binary.
 
 **Initialize the template:**
 
 ```bash
-warpgate init ares-recon-agent
+warpgate init ares-rust-credential-access-agent
 ```
 
 **Build Docker images:**
 
 ```bash
 export PROVISION_REPO_PATH="${HOME}/ansible-collection-nimbus_range"
-warpgate build ares-recon-agent --only 'docker.*'
+warpgate build ares-rust-credential-access-agent --only 'docker.*'
 ```
 
-After the build, multi-arch Ares Recon Agent Docker images will be available
-locally as `ares-recon-agent:latest`.
+After the build, multi-arch Ares Rust Credential Access Agent Docker images will be available
+locally as `ares-rust-credential-access-agent:latest`.
 
 ---
 
@@ -67,13 +66,13 @@ After building the Docker image, you can push it to GHCR:
 
 ```bash
 # Tag the image
-docker tag ares-recon-agent:latest ghcr.io/dreadnode/ares-recon-agent:latest
+docker tag ares-rust-credential-access-agent:latest ghcr.io/dreadnode/ares-rust-credential-access-agent:latest
 
 # Authenticate with GHCR
 echo $GITHUB_TOKEN | docker login ghcr.io -u YOUR_USERNAME --password-stdin
 
 # Push the image
-docker push ghcr.io/dreadnode/ares-recon-agent:latest
+docker push ghcr.io/dreadnode/ares-rust-credential-access-agent:latest
 ```
 
 ---
@@ -83,7 +82,7 @@ docker push ghcr.io/dreadnode/ares-recon-agent:latest
 To validate the template configuration before building:
 
 ```bash
-warpgate validate ares-recon-agent
+warpgate validate ares-rust-credential-access-agent
 ```
 
 ---
@@ -100,18 +99,18 @@ warpgate validate ares-recon-agent
   - Working directory: `/root`
 - **Ansible Roles:** Uses `dreadnode.nimbus_range` roles:
   - `ares_base` - Python 3.13.7, uv, core dependencies
-  - `ares_recon_tools` - nmap, netexec, impacket, bloodhound, certipy, rpcclient
+  - `ares_credential_access_tools` - Kerberos and credential tools
 - **Rust Binary:**
   - Compiled from `feature/rust-cli` branch with PyO3 Python bindings
-- Installed to `/usr/local/bin/ares`- **Installed Tools:**
-  - **Network:** nmap, smbclient, ldap-utils, dnsutils, netcat
-  - **AD Recon:** netexec, impacket, bloodhound-python, certipy
+- Installed to `/usr/local/bin/ares-worker`- **Installed Tools:**
+  - **Kerberos Tools** - Rubeus, GetNPUsers, GetUserSPNs for Kerberoasting and AS-REP roasting
+  - **Impacket** - secretsdump, ntlmrelayx for credential extraction
+  - **DCSync Tools** - mimikatz, pypykatz for domain credential extraction
+  - **LSASS Dumping** - Tools for extracting credentials from memory
 - **Directory Structure:**
   - `/ares/` - Main Ares workspace directory
   - `/ares/.venv/` - Python virtual environment
-  - `/ares/agents/` - Agent storage directory
-  - `/ares/data/` - Data storage directory
-- `/usr/local/bin/ares` - Compiled Ares binary- The build includes cleanup steps to remove temporary files, Ansible artifacts, and Rust build artifacts.
+- `/usr/local/bin/ares-worker` - Compiled worker binary- The build includes cleanup steps to remove temporary files, Ansible artifacts, and Rust build artifacts.
 
 ---
 
@@ -119,10 +118,11 @@ warpgate validate ares-recon-agent
 
 This agent is specialized for:
 
-- **Network Discovery** - Port scanning, service enumeration with nmap
-- **AD Enumeration** - LDAP queries, BloodHound data collection
-- **SMB Enumeration** - Share discovery, user enumeration with netexec
-- **Certificate Services** - ADCS enumeration with certipy
+- **Kerberoasting** - Extract service account password hashes via TGS requests
+- **AS-REP Roasting** - Target accounts without pre-authentication
+- **DCSync** - Replicate domain credentials from Active Directory
+- **Credential Extraction** - Dump credentials from LSASS and registry
+- **Pass-the-Hash/Ticket** - Credential reuse attacks
 
 ---
 

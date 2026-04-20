@@ -24,8 +24,7 @@ the nimbus_range collection, plus a compiled Rust worker binary with embedded Py
 
 The template configuration is managed in `warpgate.yaml`. Key settings include:
 
-- `name`: Template name (`ares-cracker-agent`)
-- `base.image`: Base Docker image (ares-base)
+- `name`: Template name (`ares-cracker-agent`)- `base.image`: Base Docker image (ares-base)
 - `sources`: Clones the ares repository for Rust compilation
 - `provisioners`: Shell, Ansible, and file provisioners for setup
 - `targets`: Defines build targets (container images)
@@ -39,8 +38,7 @@ Environment variables required:
 
 ## Building Docker Images
 
-This builds **Ares Cracker Agent** Docker images for `amd64` and `arm64`
-architectures, installs prerequisites, provisions using Ansible roles, and
+This builds **Ares Cracker Agent** Docker images for `amd64` and `arm64`architectures, installs prerequisites, provisions using Ansible roles, and
 compiles the Rust worker binary.
 
 **Initialize the template:**
@@ -57,6 +55,7 @@ warpgate build ares-cracker-agent --only 'docker.*'
 ```
 
 After the build, multi-arch Ares Cracker Agent Docker images will be available
+locally as `ares-cracker-agent:latest`.
 
 ---
 
@@ -103,8 +102,7 @@ warpgate validate ares-cracker-agent
   - `ares_cracking_tools` - hashcat, john, wordlists
 - **Rust Binary:**
   - Compiled from `feature/rust-cli` branch with PyO3 Python bindings
-  - Installed to `/usr/local/bin/ares`
-- **Installed Tools:**
+- Installed to `/usr/local/bin/ares`- **Installed Tools:**
   - **hashcat** - Industry-leading password recovery tool
   - **John the Ripper** - Classic password cracker with extensive format support
   - **rockyou.txt** - Famous password wordlist
@@ -118,8 +116,7 @@ warpgate validate ares-cracker-agent
   - `/ares/results/` - Cracking results storage
   - `/usr/share/wordlists/` - Wordlist collection
   - `/usr/share/hashcat/rules/` - Hashcat rules
-  - `/usr/local/bin/ares` - Compiled Ares binary
-- The build includes cleanup steps to remove temporary files, Ansible artifacts, and Rust build artifacts.
+- `/usr/local/bin/ares` - Compiled Ares binary- The build includes cleanup steps to remove temporary files, Ansible artifacts, and Rust build artifacts.
 
 ---
 
@@ -139,8 +136,7 @@ warpgate build --template ares-worker-gpu
 docker run --gpus all -it ghcr.io/dreadnode/ares-worker-gpu:latest
 ```
 
-See the [ares-worker-gpu](../ares-worker-gpu/README.md) template
-for full GPU configuration and usage details.
+See the [ares-worker-gpu](../ares-worker-gpu/README.md) templatefor full GPU configuration and usage details.
 
 ---
 

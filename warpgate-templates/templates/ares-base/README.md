@@ -1,10 +1,9 @@
-# Ares Recon Agent Warp Gate Template
+# Ares Base Warp Gate Template
 
-This template builds **Ares Recon Agent** images using Warp Gate. It supports
+This template builds **Ares Base** images using Warp Gate. It supports
 building **Docker images** (for `amd64` and `arm64`). The build provisions
-comprehensive network reconnaissance and Active Directory enumeration tools
-using Ansible roles from the nimbus_range collection, plus a compiled Rust
-worker binary with embedded Python.
+Python 3.13.7, uv package manager, the Ares framework package, and core
+dependencies using Ansible roles from the nimbus_range collection.
 
 ---
 
@@ -12,7 +11,6 @@ worker binary with embedded Python.
 
 - [Warp Gate](https://github.com/cowdogmoo/warpgate) installed and configured
 - Docker (for building Docker images)
-- `GITHUB_TOKEN` environment variable set (for cloning the ares repository)
 - Provisioning repository (ansible-collection-nimbus_range) with the
   `PROVISION_REPO_PATH` environment variable set
 - Required Packer plugins (installed automatically via `warpgate init`):
@@ -25,39 +23,37 @@ worker binary with embedded Python.
 
 The template configuration is managed in `warpgate.yaml`. Key settings include:
 
-- `name`: Template name (`ares-recon-agent`)
-- `base.image`: Base Docker image (ares-base)
-- `sources`: Clones the ares repository for Rust compilation
-- `provisioners`: Shell, Ansible, and file provisioners for setup
+- `name`: Template name (`ares-base`)
+- `base.image`: Base Docker image (Kali rolling)
+- `provisioners`: Shell and Ansible provisioners for setup
 - `targets`: Defines build targets (container images)
 
 Environment variables required:
 
 - `PROVISION_REPO_PATH`: Path to your ansible-collection-nimbus_range repository
-- `GITHUB_TOKEN`: GitHub token for cloning the ares repository
 
 ---
 
 ## Building Docker Images
 
-This builds **Ares Recon Agent** Docker images for `amd64` and `arm64`architectures, installs prerequisites, provisions using Ansible roles, and
-compiles the Rust worker binary.
+This builds **Ares Base** Docker images for `amd64` and `arm64`
+architectures, installs prerequisites, and provisions using Ansible roles.
 
 **Initialize the template:**
 
 ```bash
-warpgate init ares-recon-agent
+warpgate init ares-base
 ```
 
 **Build Docker images:**
 
 ```bash
 export PROVISION_REPO_PATH="${HOME}/ansible-collection-nimbus_range"
-warpgate build ares-recon-agent --only 'docker.*'
+warpgate build ares-base --only 'docker.*'
 ```
 
-After the build, multi-arch Ares Recon Agent Docker images will be available
-locally as `ares-recon-agent:latest`.
+After the build, multi-arch Ares Base Docker images will be available
+locally as `ares-base:latest`.
 
 ---
 
@@ -67,13 +63,13 @@ After building the Docker image, you can push it to GHCR:
 
 ```bash
 # Tag the image
-docker tag ares-recon-agent:latest ghcr.io/dreadnode/ares-recon-agent:latest
+docker tag ares-base:latest ghcr.io/dreadnode/ares-base:latest
 
 # Authenticate with GHCR
 echo $GITHUB_TOKEN | docker login ghcr.io -u YOUR_USERNAME --password-stdin
 
 # Push the image
-docker push ghcr.io/dreadnode/ares-recon-agent:latest
+docker push ghcr.io/dreadnode/ares-base:latest
 ```
 
 ---
@@ -83,14 +79,14 @@ docker push ghcr.io/dreadnode/ares-recon-agent:latest
 To validate the template configuration before building:
 
 ```bash
-warpgate validate ares-recon-agent
+warpgate validate ares-base
 ```
 
 ---
 
 ## Notes
 
-- The build uses **shell, Ansible, and file provisioners**. Ensure your
+- The build uses both **shell and Ansible provisioners**. Ensure your
   provisioning playbooks and requirement files are available at the path
   specified by `PROVISION_REPO_PATH`.
 - **Docker build:**
@@ -98,31 +94,18 @@ warpgate validate ares-recon-agent
   - Images are suitable for CI, local testing, or deployment in a Kubernetes cluster.
   - Default user: `root`
   - Working directory: `/root`
-- **Ansible Roles:** Uses `dreadnode.nimbus_range` roles:
-  - `ares_base` - Python 3.13.7, uv, core dependencies
-  - `ares_recon_tools` - nmap, netexec, impacket, bloodhound, certipy, rpcclient
-- **Rust Binary:**
-  - Compiled from `feature/rust-cli` branch with PyO3 Python bindings
-- Installed to `/usr/local/bin/ares`- **Installed Tools:**
-  - **Network:** nmap, smbclient, ldap-utils, dnsutils, netcat
-  - **AD Recon:** netexec, impacket, bloodhound-python, certipy
+- **Ansible Role:** Uses `dreadnode.nimbus_range.ares_base` role which installs:
+  - Python 3.13.7 with development packages
+  - uv package manager (fast Python package installer)
+  - Core Ares Python dependencies (python-dotenv, dreadnode, rigging, pydantic)
+  - Base system tools (build essentials, SSL libraries, git, curl)
+- **Ares Framework:** Installed from source to enable the worker entrypoint in derived images.
 - **Directory Structure:**
   - `/ares/` - Main Ares workspace directory
   - `/ares/.venv/` - Python virtual environment
   - `/ares/agents/` - Agent storage directory
   - `/ares/data/` - Data storage directory
-- `/usr/local/bin/ares` - Compiled Ares binary- The build includes cleanup steps to remove temporary files, Ansible artifacts, and Rust build artifacts.
-
----
-
-## Use Cases
-
-This agent is specialized for:
-
-- **Network Discovery** - Port scanning, service enumeration with nmap
-- **AD Enumeration** - LDAP queries, BloodHound data collection
-- **SMB Enumeration** - Share discovery, user enumeration with netexec
-- **Certificate Services** - ADCS enumeration with certipy
+- The build includes cleanup steps to remove temporary files and Ansible artifacts.
 
 ---
 

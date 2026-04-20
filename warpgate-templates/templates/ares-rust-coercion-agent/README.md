@@ -1,10 +1,9 @@
-# Ares Recon Agent Warp Gate Template
+# Ares Rust Coercion Agent Warp Gate Template
 
-This template builds **Ares Recon Agent** images using Warp Gate. It supports
+This template builds **Ares Rust Coercion Agent** images using Warp Gate. It supports
 building **Docker images** (for `amd64` and `arm64`). The build provisions
-comprehensive network reconnaissance and Active Directory enumeration tools
-using Ansible roles from the nimbus_range collection, plus a compiled Rust
-worker binary with embedded Python.
+NTLM relay and authentication coercion tools using Ansible roles from the nimbus_range
+collection, plus a compiled Rust worker binary with embedded Python.
 
 ---
 
@@ -25,7 +24,7 @@ worker binary with embedded Python.
 
 The template configuration is managed in `warpgate.yaml`. Key settings include:
 
-- `name`: Template name (`ares-recon-agent`)
+- `name`: Template name (`ares-rust-coercion-agent`)
 - `base.image`: Base Docker image (ares-base)
 - `sources`: Clones the ares repository for Rust compilation
 - `provisioners`: Shell, Ansible, and file provisioners for setup
@@ -40,24 +39,24 @@ Environment variables required:
 
 ## Building Docker Images
 
-This builds **Ares Recon Agent** Docker images for `amd64` and `arm64`architectures, installs prerequisites, provisions using Ansible roles, and
+This builds **Ares Rust Coercion Agent** Docker images for `amd64` and `arm64`architectures, installs prerequisites, provisions using Ansible roles, and
 compiles the Rust worker binary.
 
 **Initialize the template:**
 
 ```bash
-warpgate init ares-recon-agent
+warpgate init ares-rust-coercion-agent
 ```
 
 **Build Docker images:**
 
 ```bash
 export PROVISION_REPO_PATH="${HOME}/ansible-collection-nimbus_range"
-warpgate build ares-recon-agent --only 'docker.*'
+warpgate build ares-rust-coercion-agent --only 'docker.*'
 ```
 
-After the build, multi-arch Ares Recon Agent Docker images will be available
-locally as `ares-recon-agent:latest`.
+After the build, multi-arch Ares Rust Coercion Agent Docker images will be available
+locally as `ares-rust-coercion-agent:latest`.
 
 ---
 
@@ -67,13 +66,13 @@ After building the Docker image, you can push it to GHCR:
 
 ```bash
 # Tag the image
-docker tag ares-recon-agent:latest ghcr.io/dreadnode/ares-recon-agent:latest
+docker tag ares-rust-coercion-agent:latest ghcr.io/dreadnode/ares-rust-coercion-agent:latest
 
 # Authenticate with GHCR
 echo $GITHUB_TOKEN | docker login ghcr.io -u YOUR_USERNAME --password-stdin
 
 # Push the image
-docker push ghcr.io/dreadnode/ares-recon-agent:latest
+docker push ghcr.io/dreadnode/ares-rust-coercion-agent:latest
 ```
 
 ---
@@ -83,7 +82,7 @@ docker push ghcr.io/dreadnode/ares-recon-agent:latest
 To validate the template configuration before building:
 
 ```bash
-warpgate validate ares-recon-agent
+warpgate validate ares-rust-coercion-agent
 ```
 
 ---
@@ -100,18 +99,20 @@ warpgate validate ares-recon-agent
   - Working directory: `/root`
 - **Ansible Roles:** Uses `dreadnode.nimbus_range` roles:
   - `ares_base` - Python 3.13.7, uv, core dependencies
-  - `ares_recon_tools` - nmap, netexec, impacket, bloodhound, certipy, rpcclient
+  - `ares_coercion_tools` - Responder, mitm6, Coercer, PetitPotam
 - **Rust Binary:**
   - Compiled from `feature/rust-cli` branch with PyO3 Python bindings
-- Installed to `/usr/local/bin/ares`- **Installed Tools:**
-  - **Network:** nmap, smbclient, ldap-utils, dnsutils, netcat
-  - **AD Recon:** netexec, impacket, bloodhound-python, certipy
+- Installed to `/usr/local/bin/ares-worker`- **Installed Tools:**
+  - **Responder** - LLMNR/NBT-NS/mDNS poisoning for credential capture
+  - **mitm6** - DHCPv6 poisoning for IPv6 MITM attacks
+  - **Coercer** - Authentication coercion framework (multiple protocols)
+  - **PetitPotam** - MS-EFSRPC coercion for NTLM relay attacks
 - **Directory Structure:**
   - `/ares/` - Main Ares workspace directory
   - `/ares/.venv/` - Python virtual environment
-  - `/ares/agents/` - Agent storage directory
-  - `/ares/data/` - Data storage directory
-- `/usr/local/bin/ares` - Compiled Ares binary- The build includes cleanup steps to remove temporary files, Ansible artifacts, and Rust build artifacts.
+  - `/opt/Responder/` - Responder installation
+  - `/opt/PetitPotam/` - PetitPotam installation
+- `/usr/local/bin/ares-worker` - Compiled worker binary- The build includes cleanup steps to remove temporary files, Ansible artifacts, and Rust build artifacts.
 
 ---
 
@@ -119,10 +120,10 @@ warpgate validate ares-recon-agent
 
 This agent is specialized for:
 
-- **Network Discovery** - Port scanning, service enumeration with nmap
-- **AD Enumeration** - LDAP queries, BloodHound data collection
-- **SMB Enumeration** - Share discovery, user enumeration with netexec
-- **Certificate Services** - ADCS enumeration with certipy
+- **LLMNR/NBT-NS/mDNS Poisoning** - Capture NTLMv2 hashes on the local network
+- **DHCPv6 Poisoning** - IPv6 DNS takeover for MITM attacks
+- **NTLM Relay Attacks** - Coerce authentication and relay to target services
+- **ADCS ESC8 Attacks** - Coerce authentication for certificate abuse
 
 ---
 
