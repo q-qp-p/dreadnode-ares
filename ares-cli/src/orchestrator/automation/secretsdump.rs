@@ -27,6 +27,11 @@ pub async fn auto_local_admin_secretsdump(
             break;
         }
 
+        // Strategy gate: skip if secretsdump is excluded.
+        if !dispatcher.is_technique_allowed("secretsdump") {
+            continue;
+        }
+
         // Collect credentials with passwords + target DCs.
         // Do NOT gate on is_admin — the credential may have admin rights we
         // haven't confirmed yet. Secretsdump will fail fast if it lacks
@@ -100,6 +105,11 @@ pub async fn auto_local_admin_secretsdump(
         // This covers child-to-parent escalation (e.g. child.contoso.local
         // → contoso.local) where password-based creds won't have admin
         // rights on the parent DC.
+        // Strategy gate: skip dc_secretsdump if excluded.
+        if !dispatcher.is_technique_allowed("dc_secretsdump") {
+            continue;
+        }
+
         let hash_work: Vec<(String, String, String, String, String)> = {
             let state = dispatcher.state.read().await;
             let mut items = Vec::new();
@@ -135,8 +145,15 @@ pub async fn auto_local_admin_secretsdump(
         for (dedup_key, dc_ip, hash_domain, hash_value, _parent_domain) in
             hash_work.into_iter().take(2)
         {
+            let priority = dispatcher.effective_priority("dc_secretsdump");
             match dispatcher
-                .request_secretsdump_hash(&dc_ip, "Administrator", &hash_domain, &hash_value, 2)
+                .request_secretsdump_hash(
+                    &dc_ip,
+                    "Administrator",
+                    &hash_domain,
+                    &hash_value,
+                    priority,
+                )
                 .await
             {
                 Ok(Some(task_id)) => {

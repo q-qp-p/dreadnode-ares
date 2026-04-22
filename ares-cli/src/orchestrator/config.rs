@@ -7,6 +7,8 @@
 use std::env;
 use std::time::Duration;
 
+use crate::orchestrator::strategy::Strategy;
+
 /// All tunables for the orchestrator, loaded once at startup.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -62,6 +64,14 @@ pub struct OrchestratorConfig {
     /// Initial credential to seed at startup (optional).
     /// Format: `user:pass@domain` or from JSON payload.
     pub initial_credential: Option<InitialCredential>,
+
+    /// Strategy controlling technique weights, filtering, and path diversity.
+    pub strategy: Strategy,
+
+    /// Local IP of the attacker machine (for NTLM relay listeners, coercion, etc.).
+    /// Resolved from `ARES_LISTENER_IP` env var, or auto-detected via UDP socket
+    /// probe toward the first target IP.
+    pub listener_ip: Option<String>,
 }
 
 /// A credential provided at operation launch time.
@@ -73,8 +83,11 @@ pub struct InitialCredential {
 }
 
 impl OrchestratorConfig {
-    /// Load configuration from environment variables with sensible defaults.
-    pub fn from_env() -> anyhow::Result<Self> {
+    /// Load configuration from environment variables, merging strategy
+    /// settings from the optional YAML config.
+    pub fn from_env_with_yaml(
+        yaml: Option<&ares_core::config::AresConfig>,
+    ) -> anyhow::Result<Self> {
         let redis_url = env::var("ARES_REDIS_URL")
             .or_else(|_| env::var("REDIS_URL"))
             .unwrap_or_else(|_| "redis://127.0.0.1:6379/0".to_string());
@@ -87,7 +100,9 @@ impl OrchestratorConfig {
         // The value may also be prefixed with log/telemetry output from the
         // wrapper script, so we search for the first `{` in the string.
         let json_start = raw_op.find('{');
-        let (operation_id, target_domain, target_ips, json_cred) = if let Some(pos) = json_start {
+        let (operation_id, target_domain, target_ips, json_cred, json_value) = if let Some(pos) =
+            json_start
+        {
             let json_str = &raw_op[pos..];
             let v: serde_json::Value = serde_json::from_str(json_str)
                 .map_err(|e| anyhow::anyhow!("Failed to parse ARES_OPERATION_ID JSON: {e}"))?;
@@ -137,7 +152,7 @@ impl OrchestratorConfig {
                     _ => None,
                 }
             };
-            (op_id, domain, ips, cred)
+            (op_id, domain, ips, cred, Some(v))
         } else {
             // Plain operation ID — read target info from separate env vars
             let domain = env::var("ARES_TARGET_DOMAIN").unwrap_or_default();
@@ -147,7 +162,7 @@ impl OrchestratorConfig {
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
-            (raw_op, domain, ips, None)
+            (raw_op, domain, ips, None, None)
         };
 
         // Initial credential: JSON payload takes precedence, then env var.
@@ -157,6 +172,14 @@ impl OrchestratorConfig {
                 .ok()
                 .and_then(|raw| parse_credential_spec(&raw, &target_domain))
         });
+
+        // Resolve strategy from env vars + JSON payload + YAML config
+        let strategy = Strategy::resolve(json_value.as_ref(), yaml);
+
+        // Listener IP: explicit env var, or auto-detect from first target IP.
+        let listener_ip = env::var("ARES_LISTENER_IP")
+            .ok()
+            .or_else(|| detect_local_ip(target_ips.first().map(|s| s.as_str())));
 
         let max_concurrent_tasks = parse_env("ARES_MAX_CONCURRENT_TASKS", 8);
         let heartbeat_interval_secs = parse_env("ARES_HEARTBEAT_INTERVAL_SECS", 30);
@@ -189,6 +212,8 @@ impl OrchestratorConfig {
             target_domain,
             target_ips,
             initial_credential,
+            strategy,
+            listener_ip,
         })
     }
 
@@ -232,12 +257,36 @@ fn parse_credential_spec(spec: &str, default_domain: &str) -> Option<InitialCred
     })
 }
 
+/// Auto-detect the local IP by opening a UDP socket aimed at the first target.
+/// This never sends traffic — the OS resolves which interface would route to the
+/// target and we read the bound local address.
+fn detect_local_ip(target: Option<&str>) -> Option<String> {
+    let dest = target.unwrap_or("8.8.8.8");
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect(format!("{dest}:53")).ok()?;
+    let addr = socket.local_addr().ok()?;
+    let ip = addr.ip().to_string();
+    // Reject loopback — not useful as a relay listener
+    if ip.starts_with("127.") {
+        return None;
+    }
+    Some(ip)
+}
+
 /// Parse an environment variable into a numeric type, falling back to `default`.
 fn parse_env<T: std::str::FromStr>(key: &str, default: T) -> T {
     env::var(key)
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(default)
+}
+
+#[cfg(test)]
+impl OrchestratorConfig {
+    /// Test-only convenience: load from env vars without YAML config.
+    pub fn from_env() -> anyhow::Result<Self> {
+        Self::from_env_with_yaml(None)
+    }
 }
 
 #[cfg(test)]
@@ -264,6 +313,8 @@ mod tests {
             target_domain: String::new(),
             target_ips: Vec::new(),
             initial_credential: None,
+            strategy: Strategy::default(),
+            listener_ip: None,
         }
     }
 
@@ -374,5 +425,50 @@ mod tests {
         assert!(parse_credential_spec("admin:@contoso.local", "").is_none());
         // Empty password without domain
         assert!(parse_credential_spec("admin:", "").is_none());
+    }
+
+    #[test]
+    fn detect_local_ip_returns_some() {
+        // Uses 8.8.8.8 as default destination — should resolve to a local interface
+        // unless we're running in a network-less sandbox.
+        let ip = detect_local_ip(None);
+        if let Some(ref addr) = ip {
+            assert!(!addr.starts_with("127."), "Should reject loopback: {addr}");
+        }
+        // Also test with an explicit target
+        let ip2 = detect_local_ip(Some("192.168.58.10"));
+        if let Some(ref addr) = ip2 {
+            assert!(!addr.starts_with("127."));
+        }
+    }
+
+    #[test]
+    fn make_config_has_strategy() {
+        let cfg = make_config(8);
+        assert!(cfg.listener_ip.is_none());
+        assert!(cfg.initial_credential.is_none());
+        // Default strategy should be Fast
+        assert!(!cfg.strategy.should_continue_after_da());
+    }
+
+    #[test]
+    fn config_with_listener_ip_env() {
+        // JSON payload with strategy and listener IP
+        std::env::set_var("ARES_LISTENER_IP", "10.0.0.50");
+        std::env::set_var("ARES_OPERATION_ID", "test-listener");
+        let c = OrchestratorConfig::from_env().unwrap();
+        assert_eq!(c.listener_ip, Some("10.0.0.50".to_string()));
+        std::env::remove_var("ARES_LISTENER_IP");
+        std::env::remove_var("ARES_OPERATION_ID");
+    }
+
+    #[test]
+    fn config_json_with_strategy() {
+        let payload = r#"{"operation_id":"op-strat","target_domain":"contoso.local","target_ips":[],"strategy":"comprehensive"}"#;
+        std::env::set_var("ARES_OPERATION_ID", payload);
+        let c = OrchestratorConfig::from_env().unwrap();
+        assert!(c.strategy.should_continue_after_da());
+        assert!(c.strategy.is_comprehensive());
+        std::env::remove_var("ARES_OPERATION_ID");
     }
 }

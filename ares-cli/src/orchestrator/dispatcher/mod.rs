@@ -103,6 +103,16 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
+    /// Check if a technique is allowed by the active strategy.
+    pub fn is_technique_allowed(&self, technique: &str) -> bool {
+        self.config.strategy.is_technique_allowed(technique)
+    }
+
+    /// Get the effective priority for a vulnerability type from the strategy.
+    pub fn effective_priority(&self, vuln_type: &str) -> i32 {
+        self.config.strategy.effective_priority(vuln_type)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         queue: TaskQueue,
@@ -128,5 +138,156 @@ impl Dispatcher {
             // Allow up to 3 concurrent tasks per credential
             credential_inflight: CredentialInflight::new(3),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn credential_key_basic() {
+        let payload = serde_json::json!({
+            "credential": {
+                "username": "admin",
+                "domain": "contoso.local"
+            }
+        });
+        assert_eq!(
+            credential_key_from_payload(&payload),
+            Some("admin@contoso.local".to_string())
+        );
+    }
+
+    #[test]
+    fn credential_key_no_domain() {
+        let payload = serde_json::json!({
+            "credential": {
+                "username": "admin"
+            }
+        });
+        assert_eq!(
+            credential_key_from_payload(&payload),
+            Some("admin@".to_string())
+        );
+    }
+
+    #[test]
+    fn credential_key_no_credential_field() {
+        let payload = serde_json::json!({"target_ip": "192.168.58.10"});
+        assert_eq!(credential_key_from_payload(&payload), None);
+    }
+
+    #[test]
+    fn credential_key_no_username() {
+        let payload = serde_json::json!({
+            "credential": {
+                "domain": "contoso.local"
+            }
+        });
+        assert_eq!(credential_key_from_payload(&payload), None);
+    }
+
+    #[test]
+    fn credential_key_empty_payload() {
+        let payload = serde_json::json!({});
+        assert_eq!(credential_key_from_payload(&payload), None);
+    }
+
+    #[test]
+    fn credential_key_null_credential() {
+        let payload = serde_json::json!({"credential": null});
+        assert_eq!(credential_key_from_payload(&payload), None);
+    }
+
+    #[test]
+    fn credential_key_username_not_string() {
+        let payload = serde_json::json!({
+            "credential": {
+                "username": 123,
+                "domain": "contoso.local"
+            }
+        });
+        assert_eq!(credential_key_from_payload(&payload), None);
+    }
+
+    #[test]
+    fn credential_key_fabrikam_domain() {
+        let payload = serde_json::json!({
+            "credential": {
+                "username": "svc_sql",
+                "domain": "fabrikam.local"
+            }
+        });
+        assert_eq!(
+            credential_key_from_payload(&payload),
+            Some("svc_sql@fabrikam.local".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn inflight_acquire_and_release() {
+        let ci = CredentialInflight::new(2);
+        assert!(ci.try_acquire("admin@contoso.local").await);
+        assert!(ci.try_acquire("admin@contoso.local").await);
+        assert!(!ci.try_acquire("admin@contoso.local").await);
+
+        ci.release("admin@contoso.local").await;
+        assert!(ci.try_acquire("admin@contoso.local").await);
+    }
+
+    #[tokio::test]
+    async fn inflight_can_acquire_check() {
+        let ci = CredentialInflight::new(1);
+        assert!(ci.can_acquire("admin@contoso.local").await);
+        ci.try_acquire("admin@contoso.local").await;
+        assert!(!ci.can_acquire("admin@contoso.local").await);
+    }
+
+    #[tokio::test]
+    async fn inflight_different_credentials_independent() {
+        let ci = CredentialInflight::new(1);
+        assert!(ci.try_acquire("admin@contoso.local").await);
+        assert!(ci.try_acquire("svc_sql@fabrikam.local").await);
+        assert!(!ci.try_acquire("admin@contoso.local").await);
+        assert!(!ci.try_acquire("svc_sql@fabrikam.local").await);
+    }
+
+    #[tokio::test]
+    async fn inflight_release_unknown_key_noop() {
+        let ci = CredentialInflight::new(2);
+        ci.release("nobody@contoso.local").await;
+    }
+
+    #[tokio::test]
+    async fn inflight_release_removes_zero_count() {
+        let ci = CredentialInflight::new(2);
+        ci.try_acquire("admin@contoso.local").await;
+        ci.release("admin@contoso.local").await;
+        assert!(ci.can_acquire("admin@contoso.local").await);
+    }
+
+    #[tokio::test]
+    async fn inflight_double_release_saturates() {
+        let ci = CredentialInflight::new(2);
+        ci.try_acquire("admin@contoso.local").await;
+        ci.release("admin@contoso.local").await;
+        ci.release("admin@contoso.local").await;
+        assert!(ci.can_acquire("admin@contoso.local").await);
+    }
+
+    #[tokio::test]
+    async fn inflight_max_one() {
+        let ci = CredentialInflight::new(1);
+        assert!(ci.try_acquire("x@contoso.local").await);
+        assert!(!ci.try_acquire("x@contoso.local").await);
+        ci.release("x@contoso.local").await;
+        assert!(ci.try_acquire("x@contoso.local").await);
+    }
+
+    #[tokio::test]
+    async fn inflight_can_acquire_unknown_key() {
+        let ci = CredentialInflight::new(5);
+        assert!(ci.can_acquire("never_seen@contoso.local").await);
     }
 }

@@ -295,6 +295,8 @@ mod tests {
             target_domain: String::new(),
             target_ips: Vec::new(),
             initial_credential: None,
+            strategy: crate::orchestrator::strategy::Strategy::default(),
+            listener_ip: None,
         });
         let tracker = ActiveTaskTracker::new();
         (Throttler::new(config, tracker.clone()), tracker)

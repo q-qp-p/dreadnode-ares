@@ -69,7 +69,8 @@ pub async fn auto_stall_detection(
 
         // Skip only when ALL forests are dominated — stall recovery must
         // keep firing if undominated forests remain after initial DA.
-        if has_da {
+        // In comprehensive mode, never skip — keep discovering.
+        if has_da && !dispatcher.config.strategy.should_continue_after_da() {
             let state = dispatcher.state.read().await;
             if state.all_forests_dominated() {
                 continue;
@@ -114,7 +115,8 @@ pub async fn auto_stall_detection(
         // --- Fallback 1: Password spray with discovered users ---
         // Skip domains with pending delegation vulns — sprays lock delegation
         // accounts and prevent S4U exploitation from succeeding.
-        if has_users && has_dcs {
+        // Also respect strategy gate — don't spray when excluded.
+        if has_users && has_dcs && dispatcher.is_technique_allowed("password_spray") {
             let spray_work: Vec<(String, String)> = {
                 let state = dispatcher.state.read().await;
                 // Collect domains that have pending delegation vulns

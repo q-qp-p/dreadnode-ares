@@ -30,6 +30,7 @@ mod result_processing;
 mod results;
 mod routing;
 mod state;
+pub(crate) mod strategy;
 mod task_queue;
 mod throttling;
 mod tool_dispatcher;
@@ -73,10 +74,9 @@ async fn run_inner() -> Result<()> {
         return run_blue_only().await;
     }
 
-    let config =
-        Arc::new(OrchestratorConfig::from_env().context("Failed to load config from environment")?);
-
-    // Load the YAML config (optional — provides agent definitions, vuln priorities, etc.)
+    // Load the YAML config first (optional — provides agent definitions, vuln priorities,
+    // strategy settings, etc.). Must be loaded before OrchestratorConfig so strategy
+    // resolution can merge YAML values.
     let ares_config = match ares_core::config::AresConfig::from_env() {
         Ok(cfg) => {
             info!(
@@ -92,10 +92,17 @@ async fn run_inner() -> Result<()> {
         }
     };
 
+    let config = Arc::new(
+        OrchestratorConfig::from_env_with_yaml(ares_config.as_deref())
+            .context("Failed to load config from environment")?,
+    );
+
     info!(
         operation_id = %config.operation_id,
         max_concurrent = config.max_concurrent_tasks,
         has_yaml_config = ares_config.is_some(),
+        listener_ip = config.listener_ip.as_deref().unwrap_or("none"),
+        strategy = ?config.strategy.preset,
         "Configuration loaded"
     );
 
@@ -320,11 +327,22 @@ async fn run_inner() -> Result<()> {
             ))
         };
 
+    // Build sorted technique priorities for the LLM system prompt.
+    let mut technique_priorities: Vec<(String, i32)> = config
+        .strategy
+        .weights
+        .iter()
+        .map(|(k, v)| (k.clone(), *v))
+        .collect();
+    technique_priorities.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+
     let llm_runner = Arc::new(llm_runner::LlmTaskRunner::new(
         provider,
         model_name.clone(),
         tool_disp,
         shared_state.clone(),
+        config.strategy.llm_temperature,
+        technique_priorities,
     ));
     info!(
         model = %model_name,
