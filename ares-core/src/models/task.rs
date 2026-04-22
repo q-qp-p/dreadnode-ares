@@ -157,10 +157,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // ─── AgentRole Display ───────────────────────────────────────────────────
-
     #[test]
-    fn test_agent_role_display() {
+    fn agent_role_display() {
         assert_eq!(AgentRole::Orchestrator.to_string(), "orchestrator");
         assert_eq!(AgentRole::Recon.to_string(), "recon");
         assert_eq!(AgentRole::CredentialAccess.to_string(), "credential_access");
@@ -171,10 +169,8 @@ mod tests {
         assert_eq!(AgentRole::Coercion.to_string(), "coercion");
     }
 
-    // ─── AgentRole serde ─────────────────────────────────────────────────────
-
     #[test]
-    fn test_agent_role_serde_roundtrip() {
+    fn agent_role_serde_roundtrip() {
         let role = AgentRole::CredentialAccess;
         let json = serde_json::to_string(&role).unwrap();
         assert_eq!(json, r#""credential_access""#);
@@ -183,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_role_deserialize_all() {
+    fn agent_role_deserialize_all() {
         for (s, expected) in [
             (r#""orchestrator""#, AgentRole::Orchestrator),
             (r#""recon""#, AgentRole::Recon),
@@ -199,10 +195,8 @@ mod tests {
         }
     }
 
-    // ─── TaskStatus Display ──────────────────────────────────────────────────
-
     #[test]
-    fn test_task_status_display_all() {
+    fn task_status_display_all() {
         assert_eq!(TaskStatus::Pending.to_string(), "pending");
         assert_eq!(TaskStatus::InProgress.to_string(), "in_progress");
         assert_eq!(TaskStatus::Completed.to_string(), "completed");
@@ -211,10 +205,8 @@ mod tests {
         assert_eq!(TaskStatus::Retrying.to_string(), "retrying");
     }
 
-    // ─── TaskStatus serde ────────────────────────────────────────────────────
-
     #[test]
-    fn test_task_status_serde_roundtrip() {
+    fn task_status_serde_roundtrip() {
         let status = TaskStatus::InProgress;
         let json = serde_json::to_string(&status).unwrap();
         assert_eq!(json, r#""in_progress""#);
@@ -222,10 +214,8 @@ mod tests {
         assert_eq!(back, TaskStatus::InProgress);
     }
 
-    // ─── TaskInfo serde ──────────────────────────────────────────────────────
-
     #[test]
-    fn test_task_info_deserialize_minimal() {
+    fn task_info_deserialize_minimal() {
         let json = json!({
             "task_id": "t-001",
             "task_type": "recon",
@@ -243,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn test_task_info_with_status() {
+    fn task_info_with_status() {
         let json = json!({
             "task_id": "t-002",
             "task_type": "crack",
@@ -261,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn test_task_info_serialization_skips_none() {
+    fn task_info_serialization_skips_none() {
         let json = json!({
             "task_id": "t-003",
             "task_type": "lateral",
@@ -276,10 +266,8 @@ mod tests {
         assert!(serialized.get("error").is_none());
     }
 
-    // ─── TaskResult serde ────────────────────────────────────────────────────
-
     #[test]
-    fn test_task_result_deserialize() {
+    fn task_result_deserialize() {
         let json = json!({
             "task_id": "t-010",
             "success": true,
@@ -293,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn test_task_result_failure() {
+    fn task_result_failure() {
         let json = json!({
             "task_id": "t-011",
             "success": false,
@@ -305,10 +293,8 @@ mod tests {
         assert!(result.result.is_none());
     }
 
-    // ─── VulnerabilityInfo serde ─────────────────────────────────────────────
-
     #[test]
-    fn test_vulnerability_info_defaults() {
+    fn vulnerability_info_defaults() {
         let json = json!({
             "vuln_id": "esc1_192.168.58.10",
             "vuln_type": "ADCS_ESC1",
@@ -323,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vulnerability_info_with_details() {
+    fn vulnerability_info_with_details() {
         let json = json!({
             "vuln_id": "deleg_svc_sql",
             "vuln_type": "constrained_delegation",
@@ -339,10 +325,8 @@ mod tests {
         assert_eq!(vuln.details.len(), 2);
     }
 
-    // ─── AgentInfo serde ─────────────────────────────────────────────────────
-
     #[test]
-    fn test_agent_info_deserialize() {
+    fn agent_info_deserialize() {
         let json = json!({
             "name": "recon-1",
             "pod_name": "ares-recon-abc123",
@@ -357,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_info_with_capabilities() {
+    fn agent_info_with_capabilities() {
         let json = json!({
             "name": "privesc-1",
             "pod_name": "ares-privesc-def456",
@@ -396,4 +380,89 @@ pub struct TaskStatusRecord {
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payload: Option<serde_json::Value>,
+}
+
+#[cfg(test)]
+mod task_status_record_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn task_status_record_minimal() {
+        let json = json!({
+            "operation_id": "op-001",
+            "status": "running"
+        });
+        let rec: TaskStatusRecord = serde_json::from_value(json).unwrap();
+        assert_eq!(rec.operation_id, "op-001");
+        assert_eq!(rec.status, "running");
+        assert!(rec.started_at.is_none());
+        assert!(rec.ended_at.is_none());
+        assert!(rec.pod_name.is_none());
+        assert!(rec.role.is_none());
+        assert!(rec.task_type.is_none());
+        assert!(rec.error.is_none());
+        assert!(rec.payload.is_none());
+    }
+
+    #[test]
+    fn task_status_record_full() {
+        let json = json!({
+            "operation_id": "op-002",
+            "status": "completed",
+            "started_at": "2025-01-01T00:00:00Z",
+            "ended_at": "2025-01-01T01:00:00Z",
+            "pod_name": "ares-recon-xyz",
+            "role": "recon",
+            "task_type": "network_scan",
+            "error": null,
+            "payload": {"targets": ["192.168.1.0/24"]}
+        });
+        let rec: TaskStatusRecord = serde_json::from_value(json).unwrap();
+        assert_eq!(rec.operation_id, "op-002");
+        assert_eq!(rec.status, "completed");
+        assert_eq!(rec.started_at.as_deref(), Some("2025-01-01T00:00:00Z"));
+        assert_eq!(rec.ended_at.as_deref(), Some("2025-01-01T01:00:00Z"));
+        assert_eq!(rec.pod_name.as_deref(), Some("ares-recon-xyz"));
+        assert_eq!(rec.role.as_deref(), Some("recon"));
+        assert_eq!(rec.task_type.as_deref(), Some("network_scan"));
+        assert!(rec.error.is_none());
+        assert!(rec.payload.is_some());
+    }
+
+    #[test]
+    fn task_status_record_with_error() {
+        let json = json!({
+            "operation_id": "op-003",
+            "status": "failed",
+            "error": "connection timeout"
+        });
+        let rec: TaskStatusRecord = serde_json::from_value(json).unwrap();
+        assert_eq!(rec.status, "failed");
+        assert_eq!(rec.error.as_deref(), Some("connection timeout"));
+    }
+
+    #[test]
+    fn task_status_record_roundtrip() {
+        let rec = TaskStatusRecord {
+            operation_id: "op-rt".to_string(),
+            status: "pending".to_string(),
+            started_at: Some("2025-06-01T12:00:00Z".to_string()),
+            ended_at: None,
+            pod_name: Some("pod-1".to_string()),
+            role: Some("lateral".to_string()),
+            task_type: Some("smb_relay".to_string()),
+            error: None,
+            payload: Some(json!({"key": "value"})),
+        };
+        let serialized = serde_json::to_value(&rec).unwrap();
+        let deserialized: TaskStatusRecord = serde_json::from_value(serialized).unwrap();
+        assert_eq!(deserialized.operation_id, "op-rt");
+        assert_eq!(deserialized.status, "pending");
+        assert!(deserialized.ended_at.is_none());
+        assert!(deserialized.error.is_none());
+        let json_str = serde_json::to_string(&rec).unwrap();
+        assert!(!json_str.contains("ended_at"));
+        assert!(!json_str.contains("\"error\""));
+    }
 }

@@ -131,7 +131,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_delegations() {
+    fn extract_delegations_basic() {
         let output = r#"Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 
 AccountName    AccountType  DelegationType                  DelegationRightsTo
@@ -160,7 +160,7 @@ DC01$          Computer     Unconstrained                   N/A
     }
 
     #[test]
-    fn test_extract_delegations_rbcd() {
+    fn extract_delegations_rbcd() {
         let output = r#"AccountName    AccountType  DelegationType                          DelegationRightsTo
 -----------    -----------  ---------------                         ------------------
 WEB01$         Computer     Resource-Based Constrained Delegation   SRV01$
@@ -172,13 +172,13 @@ WEB01$         Computer     Resource-Based Constrained Delegation   SRV01$
     }
 
     #[test]
-    fn test_extract_delegations_empty() {
+    fn extract_delegations_empty() {
         assert!(extract_delegations("").is_empty());
         assert!(extract_delegations("No entries found.\n").is_empty());
     }
 
     #[test]
-    fn test_delegations_with_preamble() {
+    fn delegations_with_preamble() {
         let output = r#"Impacket v0.12.0 - Copyright 2023 Fortra
 
 AccountName     AccountType   DelegationType     DelegationRightsTo
@@ -193,5 +193,42 @@ web_svc         Person        Unconstrained      N/A
             DelegationType::Unconstrained
         );
         assert_eq!(delegations[0].target_spn, None);
+    }
+
+    #[test]
+    fn extract_delegations_unknown_type_skipped() {
+        let output = r#"AccountName    AccountType  DelegationType   DelegationRightsTo
+-----------    -----------  ---------------  ------------------
+svc_x          Person       SomethingElse    cifs/dc01.contoso.local
+"#;
+        let delegations = extract_delegations(output);
+        assert!(delegations.is_empty());
+    }
+
+    #[test]
+    fn extract_delegations_short_line_fallback() {
+        let output = r#"AccountName AccountType DelegationType DelegationRightsTo
+----------- ----------- -------------- ------------------
+svc short Constrained target
+"#;
+        let delegations = extract_delegations(output);
+        assert_eq!(delegations.len(), 1);
+        assert_eq!(delegations[0].account, "svc");
+    }
+
+    #[test]
+    fn extract_delegations_no_header() {
+        let output = "svc_sql  Person  Constrained  cifs/dc01.contoso.local\n";
+        let delegations = extract_delegations(output);
+        assert!(delegations.is_empty());
+    }
+
+    #[test]
+    fn extract_delegations_only_separator() {
+        let output = r#"AccountName    AccountType  DelegationType   DelegationRightsTo
+------  ------  ------  ------
+"#;
+        let delegations = extract_delegations(output);
+        assert!(delegations.is_empty());
     }
 }

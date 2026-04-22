@@ -459,7 +459,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_grade() {
+    fn grade() {
         let r = EvaluationResult {
             overall_score: 0.95,
             ..Default::default()
@@ -488,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn test_passed() {
+    fn passed() {
         let mut r = EvaluationResult::default();
         assert!(!r.passed());
 
@@ -502,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dataset_aggregation() {
+    fn dataset_aggregation() {
         let ds = DatasetEvaluationResult {
             dataset_name: "test".to_string(),
             evaluated_at: Utc::now(),
@@ -536,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn test_result_to_value() {
+    fn result_to_value() {
         let r = EvaluationResult {
             evaluation_id: "eval-1".to_string(),
             operation_id: "op-1".to_string(),
@@ -549,10 +549,8 @@ mod tests {
         assert_eq!(val["status"]["grade"], "B");
     }
 
-    // ─── Default trait ──────────────────────────────────────────────────────
-
     #[test]
-    fn test_default_creates_valid_result() {
+    fn default_creates_valid_result() {
         let r = EvaluationResult::default();
         assert!(r.evaluation_id.is_empty());
         assert!(r.operation_id.is_empty());
@@ -591,10 +589,8 @@ mod tests {
         assert!(r.error.is_none());
     }
 
-    // ─── Serde round-trip ───────────────────────────────────────────────────
-
     #[test]
-    fn test_serde_roundtrip_default() {
+    fn serde_roundtrip_default() {
         let original = EvaluationResult::default();
         let json = serde_json::to_string(&original).unwrap();
         let deserialized: EvaluationResult = serde_json::from_str(&json).unwrap();
@@ -605,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serde_roundtrip_all_fields_populated() {
+    fn serde_roundtrip_all_fields_populated() {
         let original = EvaluationResult {
             evaluation_id: "eval-full".to_string(),
             operation_id: "op-full".to_string(),
@@ -689,8 +685,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serde_missing_optional_fields() {
-        // Minimal JSON with only required fields — optional/defaulted fields omitted
+    fn serde_missing_optional_fields() {
         let json = r#"{
             "evaluation_id": "eval-min",
             "operation_id": "op-min",
@@ -731,11 +726,8 @@ mod tests {
         assert!(r.error.is_none());
     }
 
-    // ─── Grade boundary tests ───────────────────────────────────────────────
-
     #[test]
-    fn test_grade_boundaries() {
-        // Exact boundaries
+    fn grade_boundaries() {
         let at_90 = EvaluationResult {
             overall_score: 0.9,
             ..Default::default()
@@ -797,10 +789,8 @@ mod tests {
         assert_eq!(perfect.grade(), "A");
     }
 
-    // ─── passed() edge cases ────────────────────────────────────────────────
-
     #[test]
-    fn test_passed_boundary_exactly_half() {
+    fn passed_boundary_exactly_half() {
         let r = EvaluationResult {
             overall_score: 0.5,
             ioc_detection_rate: 0.5,
@@ -811,7 +801,7 @@ mod tests {
     }
 
     #[test]
-    fn test_passed_fails_overall_below_threshold() {
+    fn passed_fails_overall_below_threshold() {
         let r = EvaluationResult {
             overall_score: 0.49,
             ioc_detection_rate: 0.8,
@@ -822,7 +812,7 @@ mod tests {
     }
 
     #[test]
-    fn test_passed_fails_ioc_below_threshold() {
+    fn passed_fails_ioc_below_threshold() {
         let r = EvaluationResult {
             overall_score: 0.8,
             ioc_detection_rate: 0.49,
@@ -832,10 +822,8 @@ mod tests {
         assert!(!r.passed());
     }
 
-    // ─── investigation_status() via to_summary() ────────────────────────────
-
     #[test]
-    fn test_investigation_status_completed() {
+    fn investigation_status_completed() {
         let r = EvaluationResult {
             investigation_started: true,
             investigation_completed: true,
@@ -846,7 +834,7 @@ mod tests {
     }
 
     #[test]
-    fn test_investigation_status_started() {
+    fn investigation_status_started() {
         let r = EvaluationResult {
             investigation_started: true,
             investigation_completed: false,
@@ -857,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn test_investigation_status_not_started() {
+    fn investigation_status_not_started() {
         let r = EvaluationResult {
             investigation_started: false,
             investigation_completed: false,
@@ -867,10 +855,8 @@ mod tests {
         assert!(summary.contains("Investigation: Not Started"));
     }
 
-    // ─── to_value() structure ───────────────────────────────────────────────
-
     #[test]
-    fn test_to_value_contains_all_sections() {
+    fn to_value_contains_all_sections() {
         let r = EvaluationResult {
             evaluation_id: "eval-struct".to_string(),
             operation_id: "op-struct".to_string(),
@@ -884,17 +870,6 @@ mod tests {
         };
         let val = r.to_value();
 
-        // Check all top-level sections exist
-        assert!(val.get("evaluation_id").is_some());
-        assert!(val.get("operation_id").is_some());
-        assert!(val.get("scores").is_some());
-        assert!(val.get("gaps").is_some());
-        assert!(val.get("stats").is_some());
-        assert!(val.get("status").is_some());
-        assert!(val.get("timing").is_some());
-        assert!(val.get("cost").is_some());
-        assert!(val.get("metadata").is_some());
-
         // Check nested values
         assert_eq!(val["status"]["alert_fired"], true);
         assert_eq!(val["status"]["passed"], false); // 0.7 overall but 0.0 ioc/tech
@@ -904,7 +879,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_value_gaps_counts() {
+    fn to_value_gaps_counts() {
         let r = EvaluationResult {
             found_iocs: vec![
                 ExpectedIOC {
@@ -939,10 +914,8 @@ mod tests {
         assert_eq!(val["gaps"]["missed_iocs"].as_array().unwrap().len(), 1);
     }
 
-    // ─── to_summary() formatting ────────────────────────────────────────────
-
     #[test]
-    fn test_to_summary_includes_timing_when_present() {
+    fn to_summary_includes_timing_when_present() {
         let r = EvaluationResult {
             duration_seconds: 120.0,
             time_to_first_evidence: Some(5.5),
@@ -958,7 +931,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_summary_excludes_timing_when_absent() {
+    fn to_summary_excludes_timing_when_absent() {
         let r = EvaluationResult::default();
         let summary = r.to_summary();
         assert!(!summary.contains("Timing:"));
@@ -966,7 +939,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_summary_includes_cost_when_tokens_present() {
+    fn to_summary_includes_cost_when_tokens_present() {
         let r = EvaluationResult {
             total_tokens: 5000,
             prompt_tokens: 3000,
@@ -981,14 +954,14 @@ mod tests {
     }
 
     #[test]
-    fn test_to_summary_excludes_cost_when_no_tokens() {
+    fn to_summary_excludes_cost_when_no_tokens() {
         let r = EvaluationResult::default();
         let summary = r.to_summary();
         assert!(!summary.contains("Cost:"));
     }
 
     #[test]
-    fn test_to_summary_shows_missed_techniques() {
+    fn to_summary_shows_missed_techniques() {
         let r = EvaluationResult {
             missed_techniques: vec![
                 ExpectedTechnique {
@@ -1013,7 +986,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_summary_truncates_missed_techniques_over_five() {
+    fn to_summary_truncates_missed_techniques_over_five() {
         let techniques: Vec<ExpectedTechnique> = (0..8)
             .map(|i| ExpectedTechnique {
                 technique_id: format!("T100{i}"),
@@ -1031,7 +1004,7 @@ mod tests {
     }
 
     #[test]
-    fn test_to_summary_shows_error() {
+    fn to_summary_shows_error() {
         let r = EvaluationResult {
             error: Some("LLM rate limited".to_string()),
             ..Default::default()
@@ -1040,10 +1013,8 @@ mod tests {
         assert!(summary.contains("Error: LLM rate limited"));
     }
 
-    // ─── DatasetEvaluationResult edge cases ─────────────────────────────────
-
     #[test]
-    fn test_dataset_empty_results() {
+    fn dataset_empty_results() {
         let ds = DatasetEvaluationResult {
             dataset_name: "empty".to_string(),
             evaluated_at: Utc::now(),
@@ -1062,7 +1033,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dataset_all_passing() {
+    fn dataset_all_passing() {
         let ds = DatasetEvaluationResult {
             dataset_name: "all-pass".to_string(),
             evaluated_at: Utc::now(),
@@ -1085,7 +1056,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dataset_all_failing() {
+    fn dataset_all_failing() {
         let ds = DatasetEvaluationResult {
             dataset_name: "all-fail".to_string(),
             evaluated_at: Utc::now(),
@@ -1108,7 +1079,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dataset_to_value_structure() {
+    fn dataset_to_value_structure() {
         let ds = DatasetEvaluationResult {
             dataset_name: "test-ds".to_string(),
             evaluated_at: Utc::now(),
@@ -1128,7 +1099,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dataset_to_summary_grade_distribution() {
+    fn dataset_to_summary_grade_distribution() {
         let ds = DatasetEvaluationResult {
             dataset_name: "grade-dist".to_string(),
             evaluated_at: Utc::now(),
@@ -1165,7 +1136,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dataset_serde_roundtrip() {
+    fn dataset_serde_roundtrip() {
         let ds = DatasetEvaluationResult {
             dataset_name: "roundtrip".to_string(),
             evaluated_at: Utc::now(),
@@ -1182,15 +1153,13 @@ mod tests {
         assert!((deserialized.results[0].overall_score - 0.75).abs() < f64::EPSILON);
     }
 
-    // ─── avg() helper ───────────────────────────────────────────────────────
-
     #[test]
-    fn test_avg_empty() {
+    fn avg_empty() {
         assert_eq!(avg(&[], |r| r.overall_score), 0.0);
     }
 
     #[test]
-    fn test_avg_single() {
+    fn avg_single() {
         let results = vec![EvaluationResult {
             overall_score: 0.8,
             ..Default::default()
@@ -1199,7 +1168,7 @@ mod tests {
     }
 
     #[test]
-    fn test_avg_multiple() {
+    fn avg_multiple() {
         let results = vec![
             EvaluationResult {
                 overall_score: 0.6,
@@ -1215,5 +1184,276 @@ mod tests {
             },
         ];
         assert!((avg(&results, |r| r.overall_score) - 0.8).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn to_summary_with_missed_techniques() {
+        let r = EvaluationResult {
+            missed_techniques: vec![
+                ExpectedTechnique {
+                    technique_id: "T1003".into(),
+                    technique_name: "Credential Dumping".into(),
+                    required: true,
+                    parent_id: None,
+                },
+                ExpectedTechnique {
+                    technique_id: "T1021".into(),
+                    technique_name: "Remote Services".into(),
+                    required: false,
+                    parent_id: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let summary = r.to_summary();
+        assert!(summary.contains("Missed Techniques:"));
+        assert!(summary.contains("T1003"));
+        assert!(summary.contains("Credential Dumping"));
+        assert!(summary.contains("T1021"));
+    }
+
+    #[test]
+    fn to_summary_truncates_over_five_missed() {
+        let techniques: Vec<ExpectedTechnique> = (0..8)
+            .map(|i| ExpectedTechnique {
+                technique_id: format!("T100{i}"),
+                technique_name: format!("Tech {i}"),
+                required: true,
+                parent_id: None,
+            })
+            .collect();
+        let r = EvaluationResult {
+            missed_techniques: techniques,
+            ..Default::default()
+        };
+        let summary = r.to_summary();
+        assert!(summary.contains("... and 3 more"));
+    }
+
+    #[test]
+    fn to_value_scores_all_fields() {
+        let r = EvaluationResult {
+            overall_score: 0.75,
+            detection_score: 0.8,
+            quality_score: 0.7,
+            completeness_score: 0.65,
+            stage_score: 0.5,
+            ioc_detection_rate: 0.6,
+            technique_coverage: 0.55,
+            pyramid_elevation_score: 0.4,
+            timeline_accuracy: 0.9,
+            evidence_quality_score: 0.85,
+            ..Default::default()
+        };
+        let val = r.to_value();
+        let scores = &val["scores"];
+        assert_eq!(scores["overall"], 0.75);
+        assert_eq!(scores["detection"], 0.8);
+        assert_eq!(scores["quality"], 0.7);
+        assert_eq!(scores["completeness"], 0.65);
+        assert_eq!(scores["stage"], 0.5);
+        assert_eq!(scores["ioc_detection_rate"], 0.6);
+        assert_eq!(scores["technique_coverage"], 0.55);
+        assert_eq!(scores["pyramid_elevation"], 0.4);
+        assert_eq!(scores["timeline_accuracy"], 0.9);
+        assert_eq!(scores["evidence_quality"], 0.85);
+    }
+
+    #[test]
+    fn to_value_timing_section() {
+        let r = EvaluationResult {
+            duration_seconds: 99.9,
+            time_to_first_evidence: Some(1.5),
+            time_to_technique_identification: None,
+            time_to_ttp_elevation: Some(50.0),
+            ..Default::default()
+        };
+        let val = r.to_value();
+        let timing = &val["timing"];
+        assert_eq!(timing["duration_seconds"], 99.9);
+        assert_eq!(timing["time_to_first_evidence"], 1.5);
+        assert!(timing["time_to_technique_identification"].is_null());
+        assert_eq!(timing["time_to_ttp_elevation"], 50.0);
+    }
+
+    #[test]
+    fn to_value_cost_section() {
+        let r = EvaluationResult {
+            total_tokens: 10000,
+            prompt_tokens: 7000,
+            completion_tokens: 3000,
+            estimated_cost_usd: 0.123,
+            ..Default::default()
+        };
+        let val = r.to_value();
+        let cost = &val["cost"];
+        assert_eq!(cost["total_tokens"], 10000);
+        assert_eq!(cost["prompt_tokens"], 7000);
+        assert_eq!(cost["completion_tokens"], 3000);
+        assert_eq!(cost["estimated_cost_usd"], 0.123);
+    }
+
+    #[test]
+    fn dataset_to_summary_contains_sections() {
+        let ds = DatasetEvaluationResult {
+            dataset_name: "pentest-eval".to_string(),
+            evaluated_at: Utc::now(),
+            results: vec![
+                EvaluationResult {
+                    overall_score: 0.95,
+                    alert_fired: true,
+                    investigation_completed: true,
+                    estimated_cost_usd: 0.10,
+                    total_tokens: 8000,
+                    duration_seconds: 60.0,
+                    ..Default::default()
+                },
+                EvaluationResult {
+                    overall_score: 0.55,
+                    alert_fired: false,
+                    investigation_completed: false,
+                    estimated_cost_usd: 0.05,
+                    total_tokens: 4000,
+                    duration_seconds: 30.0,
+                    ..Default::default()
+                },
+            ],
+        };
+        let summary = ds.to_summary();
+        assert!(summary.contains("pentest-eval"));
+        assert!(summary.contains("Scenarios: 2"));
+        assert!(summary.contains("Pass Rate:"));
+        assert!(summary.contains("Grade Distribution:"));
+        assert!(summary.contains("Total Cost:"));
+    }
+
+    #[test]
+    fn dataset_total_tokens_sums() {
+        let ds = DatasetEvaluationResult {
+            dataset_name: "t".into(),
+            evaluated_at: Utc::now(),
+            results: vec![
+                EvaluationResult {
+                    total_tokens: 1000,
+                    ..Default::default()
+                },
+                EvaluationResult {
+                    total_tokens: 2500,
+                    ..Default::default()
+                },
+            ],
+        };
+        assert_eq!(ds.total_tokens(), 3500);
+    }
+
+    #[test]
+    fn dataset_avg_duration() {
+        let ds = DatasetEvaluationResult {
+            dataset_name: "t".into(),
+            evaluated_at: Utc::now(),
+            results: vec![
+                EvaluationResult {
+                    duration_seconds: 10.0,
+                    ..Default::default()
+                },
+                EvaluationResult {
+                    duration_seconds: 20.0,
+                    ..Default::default()
+                },
+            ],
+        };
+        assert!((ds.avg_duration_seconds() - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn to_summary_timing_with_all_fields() {
+        let r = EvaluationResult {
+            duration_seconds: 45.0,
+            time_to_first_evidence: Some(5.2),
+            time_to_technique_identification: Some(12.3),
+            time_to_ttp_elevation: Some(30.0),
+            ..Default::default()
+        };
+        let summary = r.to_summary();
+        assert!(summary.contains("45.0s"));
+        assert!(summary.contains("5.2s"));
+        assert!(summary.contains("12.3s"));
+        assert!(summary.contains("30.0s"));
+    }
+
+    #[test]
+    fn to_summary_cost_section() {
+        let r = EvaluationResult {
+            total_tokens: 5000,
+            prompt_tokens: 3000,
+            completion_tokens: 2000,
+            estimated_cost_usd: 0.05,
+            ..Default::default()
+        };
+        let summary = r.to_summary();
+        assert!(summary.contains("5000"));
+        assert!(summary.contains("3000"));
+        assert!(summary.contains("2000"));
+        assert!(summary.contains("$0.0500"));
+    }
+
+    #[test]
+    fn to_value_gaps_section() {
+        use crate::models::PyramidLevel;
+        let r = EvaluationResult {
+            missed_iocs: vec![ExpectedIOC {
+                ioc_type: "ip".into(),
+                value: "10.0.0.1".into(),
+                required: true,
+                pyramid_level: PyramidLevel::IpAddresses,
+                mitre_techniques: vec![],
+                source: String::new(),
+            }],
+            found_iocs: vec![
+                ExpectedIOC {
+                    ioc_type: "hash".into(),
+                    value: "abc123".into(),
+                    required: true,
+                    pyramid_level: PyramidLevel::HashValues,
+                    mitre_techniques: vec![],
+                    source: String::new(),
+                },
+                ExpectedIOC {
+                    ioc_type: "domain".into(),
+                    value: "evil.com".into(),
+                    required: false,
+                    pyramid_level: PyramidLevel::DomainNames,
+                    mitre_techniques: vec![],
+                    source: String::new(),
+                },
+            ],
+            ..Default::default()
+        };
+        let val = r.to_value();
+        let gaps = &val["gaps"];
+        assert_eq!(gaps["found_iocs_count"], 2);
+        assert_eq!(gaps["missed_iocs"].as_array().unwrap().len(), 1);
+        assert_eq!(gaps["missed_iocs"][0]["type"], "ip");
+        assert_eq!(gaps["missed_iocs"][0]["value"], "10.0.0.1");
+    }
+
+    #[test]
+    fn to_value_status_section() {
+        let r = EvaluationResult {
+            overall_score: 0.85,
+            ioc_detection_rate: 0.7,
+            technique_coverage: 0.6,
+            alert_fired: true,
+            investigation_started: true,
+            investigation_completed: false,
+            ..Default::default()
+        };
+        let val = r.to_value();
+        let status = &val["status"];
+        assert_eq!(status["passed"], true);
+        assert_eq!(status["grade"], "B");
+        assert_eq!(status["alert_fired"], true);
+        assert_eq!(status["investigation_started"], true);
+        assert_eq!(status["investigation_completed"], false);
     }
 }

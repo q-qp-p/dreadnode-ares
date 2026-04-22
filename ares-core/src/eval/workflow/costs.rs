@@ -55,3 +55,52 @@ pub fn estimate_cost(model: &str, prompt_tokens: u64, completion_tokens: u64) ->
         + completion_tokens as f64 * costs.output_per_million)
         / 1_000_000.0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn estimate_cost_known_model_claude_sonnet() {
+        let cost = estimate_cost("claude-sonnet-4-20250514", 1_000_000, 0);
+        assert!((cost - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn estimate_cost_known_model_output_tokens() {
+        let cost = estimate_cost("claude-sonnet-4-20250514", 0, 1_000_000);
+        assert!((cost - 15.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn estimate_cost_known_model_mixed() {
+        let cost = estimate_cost("gpt-4o", 500_000, 200_000);
+        let expected = (500_000.0 * 2.5 + 200_000.0 * 10.0) / 1_000_000.0;
+        assert!((cost - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn estimate_cost_unknown_model_uses_default() {
+        let cost = estimate_cost("unknown-model-xyz", 1_000_000, 0);
+        assert!((cost - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn estimate_cost_zero_tokens() {
+        let cost = estimate_cost("gpt-4o", 0, 0);
+        assert_eq!(cost, 0.0);
+    }
+
+    #[test]
+    fn estimate_cost_claude_opus() {
+        let cost = estimate_cost("claude-opus-4-20250514", 1_000_000, 1_000_000);
+        assert!((cost - 90.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn estimate_cost_gpt4_turbo() {
+        let cost = estimate_cost("gpt-4-turbo", 100_000, 50_000);
+        let expected = (100_000.0 * 10.0 + 50_000.0 * 30.0) / 1_000_000.0;
+        assert!((cost - expected).abs() < 1e-9);
+    }
+}

@@ -455,9 +455,7 @@ mod tests {
     use std::time::Duration;
     use tokio::time::Instant;
 
-    // -----------------------------------------------------------------------
     // hostname resolution logic
-    // -----------------------------------------------------------------------
 
     /// Simulate the hostname resolution logic from the main function.
     fn resolve_host_ip(account_name: &str, hosts: &[(String, String)]) -> Option<String> {
@@ -473,7 +471,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_machine_account() {
+    fn hostname_resolution_machine_account() {
         let account = "DC02$";
         let prefix = account.trim_end_matches('$').to_lowercase();
         assert_eq!(prefix, "dc02");
@@ -484,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_short_name() {
+    fn hostname_resolution_short_name() {
         let account = "DC01$";
         let prefix = account.trim_end_matches('$').to_lowercase();
         assert_eq!(prefix, "dc01");
@@ -495,7 +493,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_fqdn_match() {
+    fn hostname_resolution_fqdn_match() {
         let hosts = vec![
             (
                 "dc01.contoso.local".to_string(),
@@ -513,7 +511,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_short_hostname_match() {
+    fn hostname_resolution_short_hostname_match() {
         let hosts = vec![("dc01".to_string(), "192.168.58.10".to_string())];
         assert_eq!(
             resolve_host_ip("DC01$", &hosts),
@@ -522,7 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_no_match() {
+    fn hostname_resolution_no_match() {
         let hosts = vec![
             (
                 "sql01.contoso.local".to_string(),
@@ -537,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_case_insensitive() {
+    fn hostname_resolution_case_insensitive() {
         let hosts = vec![(
             "DC01.CONTOSO.LOCAL".to_string(),
             "192.168.58.10".to_string(),
@@ -549,7 +547,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_prefix_not_substring() {
+    fn hostname_resolution_prefix_not_substring() {
         // "dc01" should not match "dc011.contoso.local"
         let hosts = vec![(
             "dc011.contoso.local".to_string(),
@@ -559,7 +557,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_resolution_multiple_domains() {
+    fn hostname_resolution_multiple_domains() {
         let hosts = vec![
             (
                 "dc01.contoso.local".to_string(),
@@ -577,12 +575,10 @@ mod tests {
         );
     }
 
-    // -----------------------------------------------------------------------
     // is_machine_account
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_is_machine_account() {
+    fn is_machine_account() {
         assert!("DC02$".ends_with('$'));
         assert!("SQL01$".ends_with('$'));
         assert!("WEB01$".ends_with('$'));
@@ -592,54 +588,48 @@ mod tests {
     }
 
     #[test]
-    fn test_machine_account_prefix_extraction() {
+    fn machine_account_prefix_extraction() {
         assert_eq!("DC01$".trim_end_matches('$').to_lowercase(), "dc01");
         assert_eq!("SQL01$".trim_end_matches('$').to_lowercase(), "sql01");
         assert_eq!("WEB-SRV$".trim_end_matches('$').to_lowercase(), "web-srv");
     }
 
-    // -----------------------------------------------------------------------
     // user account handling
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_user_account_gets_dc_ip_as_target() {
+    fn user_account_gets_dc_ip_as_target() {
         let account = "testuser";
         let is_machine = account.ends_with('$');
         assert!(!is_machine);
     }
 
-    // -----------------------------------------------------------------------
     // dedup key format
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_dedup_key_format_user_account() {
+    fn dedup_key_format_user_account() {
         let account = "testuser";
         let dedup_key = format!("uc_user:{}", account.to_lowercase());
         assert_eq!(dedup_key, "uc_user:testuser");
     }
 
     #[test]
-    fn test_dedup_key_case_normalized() {
+    fn dedup_key_case_normalized() {
         let key1 = format!("uc_user:{}", "TestUser".to_lowercase());
         let key2 = format!("uc_user:{}", "testuser".to_lowercase());
         assert_eq!(key1, key2);
     }
 
     #[test]
-    fn test_dedup_key_unique_per_user() {
+    fn dedup_key_unique_per_user() {
         let key1 = format!("uc_user:{}", "user1".to_lowercase());
         let key2 = format!("uc_user:{}", "user2".to_lowercase());
         assert_ne!(key1, key2);
     }
 
-    // -----------------------------------------------------------------------
     // PhaseState
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_phase_state_defaults() {
+    fn phase_state_defaults() {
         let phase = PhaseState {
             coercion_dispatched_at: None,
             dump_attempts: 0,
@@ -653,7 +643,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_state_after_coercion() {
+    fn phase_state_after_coercion() {
         let phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: 0,
@@ -666,7 +656,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_state_after_first_dump() {
+    fn phase_state_after_first_dump() {
         let phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: 1,
@@ -679,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_state_max_attempts_reached() {
+    fn phase_state_max_attempts_reached() {
         let phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: MAX_DUMP_ATTEMPTS,
@@ -691,7 +681,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_state_under_max_attempts() {
+    fn phase_state_under_max_attempts() {
         let phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: MAX_DUMP_ATTEMPTS - 1,
@@ -702,12 +692,10 @@ mod tests {
         assert!(!phase.completed);
     }
 
-    // -----------------------------------------------------------------------
     // Coercion timing logic
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_coerce_to_dump_delay_not_elapsed() {
+    fn coerce_to_dump_delay_not_elapsed() {
         let phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: 0,
@@ -719,12 +707,10 @@ mod tests {
         assert!(elapsed < COERCE_TO_DUMP_DELAY);
     }
 
-    // -----------------------------------------------------------------------
     // Dump retry timing logic
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_dump_retry_eligible_no_last_dump() {
+    fn dump_retry_eligible_no_last_dump() {
         let phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: 1,
@@ -738,7 +724,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dump_retry_not_yet_eligible() {
+    fn dump_retry_not_yet_eligible() {
         let phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: 1,
@@ -750,42 +736,36 @@ mod tests {
         assert!(elapsed < DUMP_RETRY_DELAY);
     }
 
-    // -----------------------------------------------------------------------
     // Constants
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_max_dump_attempts_constant() {
+    fn max_dump_attempts_constant() {
         assert_eq!(MAX_DUMP_ATTEMPTS, 3);
     }
 
     #[test]
-    fn test_coerce_to_dump_delay() {
+    fn coerce_to_dump_delay() {
         assert_eq!(COERCE_TO_DUMP_DELAY, Duration::from_secs(15));
     }
 
     #[test]
-    fn test_dump_retry_delay() {
+    fn dump_retry_delay() {
         assert_eq!(DUMP_RETRY_DELAY, Duration::from_secs(60));
     }
 
-    // -----------------------------------------------------------------------
     // Action enum
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_action_debug_format() {
+    fn action_debug_format() {
         assert_eq!(format!("{:?}", Action::Coerce), "Coerce");
         assert_eq!(format!("{:?}", Action::Dump), "Dump");
         assert_eq!(format!("{:?}", Action::LlmExploit), "LlmExploit");
     }
 
-    // -----------------------------------------------------------------------
     // UnconstrainedWork construction patterns
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_unconstrained_work_machine_coerce() {
+    fn unconstrained_work_machine_coerce() {
         let work = UnconstrainedWork {
             vuln_id: "vuln-uc-001".to_string(),
             account_name: "DC02$".to_string(),
@@ -815,7 +795,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unconstrained_work_machine_dump() {
+    fn unconstrained_work_machine_dump() {
         let work = UnconstrainedWork {
             vuln_id: "vuln-uc-002".to_string(),
             account_name: "SQL01$".to_string(),
@@ -842,7 +822,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unconstrained_work_user_llm_exploit() {
+    fn unconstrained_work_user_llm_exploit() {
         let work = UnconstrainedWork {
             vuln_id: "vuln-uc-003".to_string(),
             account_name: "svc_admin".to_string(),
@@ -866,18 +846,18 @@ mod tests {
 
         assert!(!work.account_name.ends_with('$'));
         assert!(matches!(work.action, Action::LlmExploit));
-        assert!(work._dedup_key.is_some());
-        assert_eq!(work._dedup_key.as_ref().unwrap(), "uc_user:svc_admin");
+        assert_eq!(
+            work._dedup_key.as_ref().expect("dedup key should be set"),
+            "uc_user:svc_admin"
+        );
         // For user accounts, host_ip matches dc_ip
         assert_eq!(work.host_ip, work.dc_ip.as_ref().unwrap().as_str());
     }
 
-    // -----------------------------------------------------------------------
     // Phase state machine transitions
-    // -----------------------------------------------------------------------
 
     #[test]
-    fn test_phase_transition_none_to_coerce() {
+    fn phase_transition_none_to_coerce() {
         // When no phase exists and DC is available, action should be Coerce
         let mut phases: HashMap<String, PhaseState> = HashMap::new();
         let vuln_id = "vuln-001";
@@ -907,7 +887,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_transition_already_coerced_skips_to_dump() {
+    fn phase_transition_already_coerced_skips_to_dump() {
         let phases: HashMap<String, PhaseState> = HashMap::new();
         let vuln_id = "vuln-002";
         let dc_ip = Some("192.168.58.10".to_string());
@@ -924,7 +904,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_dump_increments_attempts() {
+    fn phase_dump_increments_attempts() {
         let mut phase = PhaseState {
             coercion_dispatched_at: Some(Instant::now()),
             dump_attempts: 0,
@@ -953,7 +933,7 @@ mod tests {
     }
 
     #[test]
-    fn test_phase_llm_exploit_immediately_completed() {
+    fn phase_llm_exploit_immediately_completed() {
         let phase = PhaseState {
             coercion_dispatched_at: None,
             dump_attempts: 0,

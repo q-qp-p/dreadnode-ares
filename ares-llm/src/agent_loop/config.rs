@@ -77,3 +77,34 @@ impl Default for RetryConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_loop_config_defaults() {
+        let cfg = AgentLoopConfig::default();
+        assert_eq!(cfg.model, "claude-sonnet-4-20250514");
+        assert_eq!(cfg.max_steps, 75);
+        assert_eq!(cfg.max_tokens, 4096);
+        assert!(cfg.temperature.is_none());
+        assert_eq!(cfg.max_tool_calls_per_name, 10);
+    }
+
+    #[test]
+    fn context_config_defaults() {
+        let cfg = ContextConfig::default();
+        assert_eq!(cfg.max_context_tokens, 180_000);
+        assert_eq!(cfg.max_tool_output_chars, 30_000);
+        assert_eq!(cfg.min_recent_messages, 10);
+    }
+
+    #[test]
+    fn retry_config_defaults() {
+        let cfg = RetryConfig::default();
+        assert_eq!(cfg.max_retries, 5);
+        assert_eq!(cfg.base_delay_ms, 1_000);
+        assert_eq!(cfg.max_delay_ms, 60_000);
+    }
+}

@@ -153,31 +153,31 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_dc_by_kerberos_service() {
+    fn detect_dc_by_kerberos_service() {
         let host = make_host("srv01", vec!["88/tcp (kerberos-sec)"], vec![]);
         assert!(host.detect_dc());
     }
 
     #[test]
-    fn test_detect_dc_by_ldap_service() {
+    fn detect_dc_by_ldap_service() {
         let host = make_host("srv01", vec!["389/tcp (ldap)"], vec![]);
         assert!(host.detect_dc());
     }
 
     #[test]
-    fn test_detect_dc_by_hostname_prefix() {
+    fn detect_dc_by_hostname_prefix() {
         let host = make_host("dc01.contoso.local", vec![], vec![]);
         assert!(host.detect_dc());
     }
 
     #[test]
-    fn test_detect_dc_by_role() {
+    fn detect_dc_by_role() {
         let host = make_host("srv01", vec![], vec!["domain controller"]);
         assert!(host.detect_dc());
     }
 
     #[test]
-    fn test_detect_dc_not_dc() {
+    fn detect_dc_not_dc() {
         let host = make_host(
             "srv01.contoso.local",
             vec!["445/tcp (microsoft-ds)"],
@@ -187,31 +187,31 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_dc_empty() {
+    fn detect_dc_empty() {
         let host = make_host("", vec![], vec![]);
         assert!(!host.detect_dc());
     }
 
     #[test]
-    fn test_detect_dc_case_insensitive() {
+    fn detect_dc_case_insensitive() {
         let host = make_host("DC01.CONTOSO.LOCAL", vec![], vec![]);
         assert!(host.detect_dc());
     }
 
     #[test]
-    fn test_detect_dc_by_kerberos_service_name() {
+    fn detect_dc_by_kerberos_service_name() {
         let host = make_host("server", vec!["kerberos"], vec![]);
         assert!(host.detect_dc());
     }
 
     #[test]
-    fn test_detect_dc_by_ldap_service_name() {
+    fn detect_dc_by_ldap_service_name() {
         let host = make_host("server", vec!["ldap"], vec![]);
         assert!(host.detect_dc());
     }
 
     #[test]
-    fn test_trust_info_is_parent_child() {
+    fn trust_info_is_parent_child() {
         let t = TrustInfo {
             domain: "child.corp.local".to_string(),
             flat_name: "CHILD".to_string(),
@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn test_trust_info_is_cross_forest() {
+    fn trust_info_is_cross_forest() {
         let t = TrustInfo {
             domain: "fabrikam.local".to_string(),
             flat_name: "FABRIKAM".to_string(),
@@ -237,7 +237,7 @@ mod tests {
     }
 
     #[test]
-    fn test_trust_info_external_is_cross_forest() {
+    fn trust_info_external_is_cross_forest() {
         let t = TrustInfo {
             domain: "other.local".to_string(),
             flat_name: "OTHER".to_string(),
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn test_trust_info_unknown_type_not_cross_forest() {
+    fn trust_info_unknown_type_not_cross_forest() {
         let t = TrustInfo {
             domain: "x.local".to_string(),
             flat_name: String::new(),
@@ -259,6 +259,214 @@ mod tests {
         };
         assert!(!t.is_cross_forest());
         assert!(!t.is_parent_child());
+    }
+
+    #[test]
+    fn host_serde_roundtrip() {
+        let host = Host {
+            ip: "10.0.0.1".to_string(),
+            hostname: "web01".to_string(),
+            os: "Windows Server 2019".to_string(),
+            roles: vec!["web".to_string()],
+            services: vec!["80/tcp".to_string(), "443/tcp".to_string()],
+            is_dc: false,
+            owned: true,
+        };
+        let json = serde_json::to_string(&host).unwrap();
+        let deser: Host = serde_json::from_str(&json).unwrap();
+        assert_eq!(host, deser);
+    }
+
+    #[test]
+    fn host_serde_defaults() {
+        let json = r#"{"ip":"10.0.0.1"}"#;
+        let host: Host = serde_json::from_str(json).unwrap();
+        assert_eq!(host.ip, "10.0.0.1");
+        assert!(host.hostname.is_empty());
+        assert!(host.os.is_empty());
+        assert!(host.roles.is_empty());
+        assert!(host.services.is_empty());
+        assert!(!host.is_dc);
+        assert!(!host.owned);
+    }
+
+    #[test]
+    fn credential_serde_roundtrip() {
+        let cred = Credential {
+            id: "test-id".to_string(),
+            username: "admin".to_string(),
+            password: "P@ssw0rd".to_string(),
+            domain: "CORP".to_string(),
+            source: "secretsdump".to_string(),
+            discovered_at: None,
+            is_admin: true,
+            parent_id: Some("parent-1".to_string()),
+            attack_step: 2,
+        };
+        let json = serde_json::to_string(&cred).unwrap();
+        let deser: Credential = serde_json::from_str(&json).unwrap();
+        assert_eq!(cred, deser);
+    }
+
+    #[test]
+    fn hash_serde_defaults() {
+        let json = r#"{"username":"admin","hash_value":"aad3b435"}"#;
+        let hash: Hash = serde_json::from_str(json).unwrap();
+        assert_eq!(hash.username, "admin");
+        assert_eq!(hash.hash_value, "aad3b435");
+        assert_eq!(hash.hash_type, "NTLM");
+        assert!(hash.domain.is_empty());
+        assert!(hash.cracked_password.is_none());
+        assert!(hash.aes_key.is_none());
+        assert_eq!(hash.attack_step, 0);
+    }
+
+    #[test]
+    fn hash_serde_with_aes_key() {
+        let hash = Hash {
+            id: "h1".to_string(),
+            username: "krbtgt".to_string(),
+            hash_value: "abc123".to_string(),
+            hash_type: "NTLM".to_string(),
+            domain: "CORP".to_string(),
+            cracked_password: None,
+            source: "dcsync".to_string(),
+            discovered_at: None,
+            parent_id: None,
+            attack_step: 1,
+            aes_key: Some("aes256key".to_string()),
+        };
+        let json = serde_json::to_string(&hash).unwrap();
+        assert!(json.contains("aes256key"));
+        let deser: Hash = serde_json::from_str(&json).unwrap();
+        assert_eq!(hash, deser);
+    }
+
+    #[test]
+    fn share_serde_roundtrip() {
+        let share = Share {
+            host: "10.0.0.5".to_string(),
+            name: "ADMIN$".to_string(),
+            permissions: "READ".to_string(),
+            comment: "Remote Admin".to_string(),
+        };
+        let json = serde_json::to_string(&share).unwrap();
+        let deser: Share = serde_json::from_str(&json).unwrap();
+        assert_eq!(share, deser);
+    }
+
+    #[test]
+    fn share_serde_defaults() {
+        let json = r#"{"host":"10.0.0.5","name":"C$"}"#;
+        let share: Share = serde_json::from_str(json).unwrap();
+        assert_eq!(share.host, "10.0.0.5");
+        assert_eq!(share.name, "C$");
+        assert!(share.permissions.is_empty());
+        assert!(share.comment.is_empty());
+    }
+
+    #[test]
+    fn user_serde_roundtrip() {
+        let user = User {
+            username: "jdoe".to_string(),
+            domain: "CORP".to_string(),
+            description: "John Doe".to_string(),
+            is_admin: true,
+            source: "ldap".to_string(),
+        };
+        let json = serde_json::to_string(&user).unwrap();
+        let deser: User = serde_json::from_str(&json).unwrap();
+        assert_eq!(user, deser);
+    }
+
+    #[test]
+    fn user_serde_defaults() {
+        let json = r#"{"username":"guest"}"#;
+        let user: User = serde_json::from_str(json).unwrap();
+        assert_eq!(user.username, "guest");
+        assert!(user.domain.is_empty());
+        assert!(user.description.is_empty());
+        assert!(!user.is_admin);
+        assert!(user.source.is_empty());
+    }
+
+    #[test]
+    fn target_serde_roundtrip() {
+        let target = Target {
+            ip: "192.168.1.1".to_string(),
+            hostname: "dc01".to_string(),
+            domain: "corp.local".to_string(),
+            environment: "prod".to_string(),
+        };
+        let json = serde_json::to_string(&target).unwrap();
+        let deser: Target = serde_json::from_str(&json).unwrap();
+        assert_eq!(target, deser);
+    }
+
+    #[test]
+    fn target_serde_skip_empty() {
+        let target = Target {
+            ip: "10.0.0.1".to_string(),
+            hostname: String::new(),
+            domain: String::new(),
+            environment: String::new(),
+        };
+        let json = serde_json::to_string(&target).unwrap();
+        assert!(!json.contains("hostname"));
+        assert!(!json.contains("domain"));
+        assert!(!json.contains("environment"));
+    }
+
+    #[test]
+    fn trust_info_serde_roundtrip() {
+        let trust = TrustInfo {
+            domain: "child.corp.local".to_string(),
+            flat_name: "CHILD".to_string(),
+            direction: "bidirectional".to_string(),
+            trust_type: "parent_child".to_string(),
+            sid_filtering: true,
+        };
+        let json = serde_json::to_string(&trust).unwrap();
+        let deser: TrustInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(trust, deser);
+    }
+
+    #[test]
+    fn detect_dc_by_multiple_services() {
+        let host = make_host(
+            "srv01",
+            vec!["88/tcp (kerberos)", "389/tcp (ldap)", "445/tcp"],
+            vec![],
+        );
+        assert!(host.detect_dc());
+    }
+
+    #[test]
+    fn detect_dc_non_dc_services_only() {
+        let host = make_host(
+            "fileserver",
+            vec!["445/tcp (microsoft-ds)", "139/tcp (netbios-ssn)"],
+            vec!["file server"],
+        );
+        assert!(!host.detect_dc());
+    }
+
+    #[test]
+    fn host_skip_empty_fields_in_json() {
+        let host = Host {
+            ip: "10.0.0.1".to_string(),
+            hostname: String::new(),
+            os: String::new(),
+            roles: vec![],
+            services: vec![],
+            is_dc: false,
+            owned: false,
+        };
+        let json = serde_json::to_string(&host).unwrap();
+        assert!(!json.contains("hostname"));
+        assert!(!json.contains("os"));
+        assert!(!json.contains("roles"));
+        assert!(!json.contains("services"));
     }
 }
 

@@ -17,3 +17,32 @@ pub fn get_technique_display(technique_id: &str) -> String {
         None => technique_id.to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn technique_display_known_id() {
+        let display = get_technique_display("T1003");
+        assert!(display.starts_with("T1003"));
+        assert!(display.contains('('));
+    }
+
+    #[test]
+    fn technique_display_unknown_id_returns_raw() {
+        let display = get_technique_display("T9999.999");
+        assert_eq!(display, "T9999.999");
+    }
+
+    #[test]
+    fn technique_display_empty_string() {
+        let display = get_technique_display("");
+        assert_eq!(display, "");
+    }
+
+    #[test]
+    fn mitre_techniques_map_loads() {
+        let _ = MITRE_TECHNIQUES.len();
+    }
+}
