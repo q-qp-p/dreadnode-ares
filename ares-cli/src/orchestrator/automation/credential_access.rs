@@ -10,6 +10,56 @@ use tracing::{debug, info, warn};
 use crate::orchestrator::dispatcher::Dispatcher;
 use crate::orchestrator::state::*;
 
+/// Build kerberoast dedup key from domain and username.
+fn kerberoast_dedup_key(domain: &str, username: &str) -> String {
+    format!("krb:{}:{}", domain.to_lowercase(), username.to_lowercase())
+}
+
+/// Build username spray dedup key from domain and username.
+fn spray_dedup_key(domain: &str, username: &str) -> String {
+    format!("{}:{}", domain.to_lowercase(), username.to_lowercase())
+}
+
+/// Build common password spray dedup key.
+fn common_spray_dedup_key(domain: &str) -> String {
+    format!("common:{}", domain.to_lowercase())
+}
+
+/// Build low-hanging fruit dedup key.
+fn low_hanging_dedup_key(domain: &str, username: &str) -> String {
+    format!("{}:{}", domain.to_lowercase(), username.to_lowercase())
+}
+
+/// Build secretsdump dedup key for credential-based dumps.
+fn credential_secretsdump_dedup_key(ip: &str, domain: &str, username: &str) -> String {
+    format!(
+        "{}:{}:{}",
+        ip,
+        domain.to_lowercase(),
+        username.to_lowercase()
+    )
+}
+
+/// Resolve host domain from hostname FQDN (e.g. "dc01.contoso.local" -> "contoso.local").
+fn resolve_host_domain_from_fqdn(hostname: &str) -> String {
+    hostname
+        .to_lowercase()
+        .split_once('.')
+        .map(|x| x.1)
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Check if a host domain is related to a credential domain (same, child, or parent).
+fn is_host_domain_related(host_domain: &str, cred_domain: &str) -> bool {
+    if host_domain.is_empty() {
+        return false;
+    }
+    let h = host_domain.to_lowercase();
+    let c = cred_domain.to_lowercase();
+    h == c || h.ends_with(&format!(".{c}")) || c.ends_with(&format!(".{h}"))
+}
+
 /// Complex credential access automation: kerberoast, AS-REP roast, password spray.
 /// Interval: 15s + Notify wake. Matches Python `_auto_credential_access`.
 pub async fn auto_credential_access(
@@ -30,7 +80,6 @@ pub async fn auto_credential_access(
             break;
         }
 
-        // --- AS-REP Roast: one per domain (unauthenticated — no credentials required) ---
         let asrep_work: Vec<(String, String)> = if !dispatcher.is_technique_allowed("asrep_roast") {
             Vec::new()
         } else {
@@ -80,7 +129,6 @@ pub async fn auto_credential_access(
             }
         }
 
-        // --- Kerberoast: one per domain + credential pair ---
         let kerberoast_work: Vec<(String, String, String, ares_core::models::Credential)> =
             if !dispatcher.is_technique_allowed("kerberoast") {
                 Vec::new()
@@ -98,7 +146,7 @@ pub async fn auto_credential_access(
                     .filter(|c| !state.is_credential_quarantined(&c.username, &c.domain))
                     .filter_map(|cred| {
                         let cred_domain = cred.domain.to_lowercase();
-                        let dedup = format!("krb:{}:{}", cred_domain, cred.username.to_lowercase());
+                        let dedup = kerberoast_dedup_key(&cred_domain, &cred.username);
                         if state.is_processed(DEDUP_CRACK_REQUESTS, &dedup) {
                             return None;
                         }
@@ -161,7 +209,6 @@ pub async fn auto_credential_access(
             }
         }
 
-        // --- Password spray: username-as-password ---
         let spray_work: Vec<(String, String, String)> = {
             let state = dispatcher.state.read().await;
             state
@@ -174,7 +221,7 @@ pub async fn auto_credential_access(
                 .filter(|u| !state.is_credential_quarantined(&u.username, &u.domain))
                 .filter_map(|u| {
                     let user_domain = u.domain.to_lowercase();
-                    let dedup = format!("{}:{}", user_domain, u.username.to_lowercase());
+                    let dedup = spray_dedup_key(&user_domain, &u.username);
                     if state.is_processed(DEDUP_USERNAME_SPRAY, &dedup) {
                         return None;
                     }
@@ -241,7 +288,6 @@ pub async fn auto_credential_access(
             }
         }
 
-        // --- Low-hanging fruit: SYSVOL, GPP, LDAP descriptions, LAPS per new credential ---
         // Mirrors Python's fast credential discovery — dispatches high-success-rate
         // techniques that find hardcoded/stored passwords in Active Directory.
         let low_hanging_work: Vec<(String, String, ares_core::models::Credential)> = {
@@ -255,7 +301,7 @@ pub async fn auto_credential_access(
                 .filter(|c| !state.is_credential_quarantined(&c.username, &c.domain))
                 .filter_map(|cred| {
                     let cred_domain = cred.domain.to_lowercase();
-                    let dedup = format!("{}:{}", cred_domain, cred.username.to_lowercase());
+                    let dedup = low_hanging_dedup_key(&cred_domain, &cred.username);
                     if state.is_processed(DEDUP_LOW_HANGING, &dedup) {
                         return None;
                     }
@@ -311,7 +357,6 @@ pub async fn auto_credential_access(
             }
         }
 
-        // --- Secretsdump per new credential against same-domain hosts ---
         // Dispatches secretsdump for new credentials against hosts in the same
         // domain (or child/parent domains). Cross-domain attempts generate
         // failed auths that trigger AD account lockout.
@@ -345,13 +390,7 @@ pub async fn auto_credential_access(
                             // Resolve host domain: prefer hostname FQDN, fall back
                             // to domain_controllers map for bare-IP hosts.
                             let host_domain = {
-                                let from_hostname = host
-                                    .hostname
-                                    .to_lowercase()
-                                    .split_once('.')
-                                    .map(|x| x.1)
-                                    .unwrap_or("")
-                                    .to_string();
+                                let from_hostname = resolve_host_domain_from_fqdn(&host.hostname);
                                 if from_hostname.is_empty() {
                                     // Check if this IP is a known DC
                                     state
@@ -367,19 +406,14 @@ pub async fn auto_credential_access(
                             // Only target same-domain hosts. Skip unknown-domain
                             // hosts — they'll be retried next cycle after nmap
                             // populates hostnames.
-                            if host_domain.is_empty()
-                                || (host_domain != cred_domain
-                                    && !host_domain.ends_with(&format!(".{cred_domain}"))
-                                    && !cred_domain.ends_with(&format!(".{host_domain}")))
-                            {
+                            if !is_host_domain_related(&host_domain, &cred_domain) {
                                 continue;
                             }
 
-                            let dedup = format!(
-                                "{}:{}:{}",
-                                host.ip,
-                                cred_domain,
-                                cred.username.to_lowercase()
+                            let dedup = credential_secretsdump_dedup_key(
+                                &host.ip,
+                                &cred_domain,
+                                &cred.username,
                             );
                             if !state.is_processed(DEDUP_SECRETSDUMP, &dedup) {
                                 items.push((dedup, host.ip.clone(), cred.clone()));
@@ -423,7 +457,6 @@ pub async fn auto_credential_access(
             }
         }
 
-        // --- Common password spray: per domain when no admin creds found yet ---
         // Keep spraying common passwords until we find admin or achieve DA.
         let common_spray_work: Vec<(String, String)> =
             if !dispatcher.is_technique_allowed("password_spray") {
@@ -440,7 +473,7 @@ pub async fn auto_credential_access(
                         .domain_controllers
                         .iter()
                         .filter(|(domain, _)| {
-                            let key = format!("common:{}", domain.to_lowercase());
+                            let key = common_spray_dedup_key(domain);
                             !state.is_processed(DEDUP_PASSWORD_SPRAY, &key)
                         })
                         // Only spray after initial recon (AS-REP) has completed.
@@ -487,7 +520,7 @@ pub async fn auto_credential_access(
 
             // Mark as processed BEFORE submitting to prevent duplicate deferred entries.
             // The task will be dispatched or deferred regardless.
-            let key = format!("common:{}", domain.to_lowercase());
+            let key = common_spray_dedup_key(&domain);
             dispatcher
                 .state
                 .write()
@@ -512,5 +545,177 @@ pub async fn auto_credential_access(
                 Err(e) => warn!(err = %e, "Failed to dispatch common password spray"),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kerberoast_dedup_key_basic() {
+        assert_eq!(
+            kerberoast_dedup_key("CONTOSO.LOCAL", "Administrator"),
+            "krb:contoso.local:administrator"
+        );
+    }
+
+    #[test]
+    fn kerberoast_dedup_key_already_lowercase() {
+        assert_eq!(
+            kerberoast_dedup_key("corp.net", "svc_sql"),
+            "krb:corp.net:svc_sql"
+        );
+    }
+
+    #[test]
+    fn kerberoast_dedup_key_empty_inputs() {
+        assert_eq!(kerberoast_dedup_key("", ""), "krb::");
+    }
+
+    #[test]
+    fn spray_dedup_key_basic() {
+        assert_eq!(
+            spray_dedup_key("CONTOSO.LOCAL", "jdoe"),
+            "contoso.local:jdoe"
+        );
+    }
+
+    #[test]
+    fn spray_dedup_key_mixed_case() {
+        assert_eq!(spray_dedup_key("Corp.Net", "Admin"), "corp.net:admin");
+    }
+
+    #[test]
+    fn spray_dedup_key_empty() {
+        assert_eq!(spray_dedup_key("", ""), ":");
+    }
+
+    #[test]
+    fn common_spray_dedup_key_basic() {
+        assert_eq!(
+            common_spray_dedup_key("CONTOSO.LOCAL"),
+            "common:contoso.local"
+        );
+    }
+
+    #[test]
+    fn common_spray_dedup_key_empty() {
+        assert_eq!(common_spray_dedup_key(""), "common:");
+    }
+
+    #[test]
+    fn low_hanging_dedup_key_basic() {
+        assert_eq!(
+            low_hanging_dedup_key("CONTOSO.LOCAL", "Admin"),
+            "contoso.local:admin"
+        );
+    }
+
+    #[test]
+    fn low_hanging_dedup_key_empty() {
+        assert_eq!(low_hanging_dedup_key("", ""), ":");
+    }
+
+    #[test]
+    fn credential_secretsdump_dedup_key_basic() {
+        assert_eq!(
+            credential_secretsdump_dedup_key("192.168.58.1", "CONTOSO.LOCAL", "Admin"),
+            "192.168.58.1:contoso.local:admin"
+        );
+    }
+
+    #[test]
+    fn credential_secretsdump_dedup_key_preserves_ip() {
+        // IP should not be lowercased (it's already case-insensitive)
+        assert_eq!(
+            credential_secretsdump_dedup_key("192.168.58.100", "Corp.Net", "SVC"),
+            "192.168.58.100:corp.net:svc"
+        );
+    }
+
+    #[test]
+    fn credential_secretsdump_dedup_key_empty() {
+        assert_eq!(credential_secretsdump_dedup_key("", "", ""), "::");
+    }
+
+    #[test]
+    fn resolve_host_domain_from_fqdn_typical() {
+        assert_eq!(
+            resolve_host_domain_from_fqdn("dc01.contoso.local"),
+            "contoso.local"
+        );
+    }
+
+    #[test]
+    fn resolve_host_domain_from_fqdn_nested() {
+        assert_eq!(
+            resolve_host_domain_from_fqdn("web01.child.contoso.local"),
+            "child.contoso.local"
+        );
+    }
+
+    #[test]
+    fn resolve_host_domain_from_fqdn_case_insensitive() {
+        assert_eq!(
+            resolve_host_domain_from_fqdn("DC01.CONTOSO.LOCAL"),
+            "contoso.local"
+        );
+    }
+
+    #[test]
+    fn resolve_host_domain_from_fqdn_bare_hostname() {
+        assert_eq!(resolve_host_domain_from_fqdn("dc01"), "");
+    }
+
+    #[test]
+    fn resolve_host_domain_from_fqdn_empty() {
+        assert_eq!(resolve_host_domain_from_fqdn(""), "");
+    }
+
+    #[test]
+    fn is_host_domain_related_same_domain() {
+        assert!(is_host_domain_related("contoso.local", "contoso.local"));
+    }
+
+    #[test]
+    fn is_host_domain_related_case_insensitive() {
+        assert!(is_host_domain_related("CONTOSO.LOCAL", "contoso.local"));
+    }
+
+    #[test]
+    fn is_host_domain_related_child_of_cred() {
+        assert!(is_host_domain_related(
+            "child.contoso.local",
+            "contoso.local"
+        ));
+    }
+
+    #[test]
+    fn is_host_domain_related_parent_of_cred() {
+        assert!(is_host_domain_related(
+            "contoso.local",
+            "child.contoso.local"
+        ));
+    }
+
+    #[test]
+    fn is_host_domain_related_unrelated() {
+        assert!(!is_host_domain_related("corp.net", "contoso.local"));
+    }
+
+    #[test]
+    fn is_host_domain_related_empty_host() {
+        assert!(!is_host_domain_related("", "contoso.local"));
+    }
+
+    #[test]
+    fn is_host_domain_related_empty_cred() {
+        assert!(!is_host_domain_related("contoso.local", ""));
+    }
+
+    #[test]
+    fn is_host_domain_related_both_empty() {
+        assert!(!is_host_domain_related("", ""));
     }
 }

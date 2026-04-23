@@ -192,10 +192,6 @@ fn state_context_injected_into_template() {
     assert!(prompt.contains("contoso.local"));
 }
 
-// -----------------------------------------------------------------------
-// is_pass_the_hash_compatible tests
-// -----------------------------------------------------------------------
-
 #[test]
 fn pth_compatible_lm_nt() {
     assert!(helpers::is_pass_the_hash_compatible(Some(
@@ -227,10 +223,6 @@ fn pth_rejects_empty() {
 fn pth_rejects_triple_colon() {
     assert!(!helpers::is_pass_the_hash_compatible(Some("aaa:bbb:ccc")));
 }
-
-// -----------------------------------------------------------------------
-// Credential access branch tests
-// -----------------------------------------------------------------------
 
 #[test]
 fn credaccess_kerberos_ticket_secretsdump() {
@@ -322,7 +314,7 @@ fn credaccess_low_hanging_no_creds() {
         "reason": "low_hanging_fruit initial"
     });
     let prompt = generate_task_prompt("credential_access", "t-6", &payload, None).unwrap();
-    assert!(prompt.contains("MANDATORY TECHNIQUE EXECUTION (NO CREDENTIALS)"));
+    assert!(prompt.contains("LOW HANGING FRUIT credential discovery (NO CREDENTIALS)"));
     assert!(prompt.contains("username_as_password"));
     assert!(prompt.contains("password_spray"));
 }
@@ -402,10 +394,6 @@ fn credaccess_generic_fallback_non_pth_hash() {
     assert!(prompt.contains("hash (non-NTLM)"));
     assert!(prompt.contains("not NTLM pass-the-hash compatible"));
 }
-
-// -----------------------------------------------------------------------
-// Exploit branch tests
-// -----------------------------------------------------------------------
 
 #[test]
 fn exploit_adcs_enumerate() {

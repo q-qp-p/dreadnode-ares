@@ -88,10 +88,6 @@ pub fn blue_tools_for_role(role: BlueAgentRole) -> Vec<ToolDefinition> {
     tools
 }
 
-// ---------------------------------------------------------------------------
-// Role-specific tool set assembly
-// ---------------------------------------------------------------------------
-
 fn triage_tool_definitions() -> Vec<ToolDefinition> {
     let mut tools = loki::loki_tool_definitions();
     tools.extend(grafana::grafana_tool_definitions());

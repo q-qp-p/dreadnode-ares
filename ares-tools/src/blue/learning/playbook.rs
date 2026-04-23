@@ -421,10 +421,6 @@ async fn find_latest_operation(conn: &mut redis::aio::MultiplexedConnection) -> 
     latest_id
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::super::mitre_db::{lookup_technique, suggest_techniques};

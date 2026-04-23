@@ -61,7 +61,6 @@ pub async fn create_detection_rule(args: &Value) -> Result<ToolOutput> {
         }
     }
 
-    // Build the alert rule
     let wrapped_query = format!("count_over_time({logql_query} [5m]) > 0");
     let mut labels = serde_json::json!({
         "severity": severity,
@@ -171,7 +170,6 @@ pub async fn get_alert_history(args: &Value) -> Result<ToolOutput> {
         return Ok(make_error(&format!("Grafana returned {status}: {body}")));
     }
 
-    // Format the rules list
     if let Ok(rules) = serde_json::from_str::<Vec<Value>>(&body) {
         let mut parts = Vec::new();
         parts.push(format!("Alert rules ({} total):\n", rules.len()));

@@ -26,7 +26,6 @@ pub(super) fn print_loot_human(
         println!("Running:   {elapsed}");
     }
 
-    // --- Compute domains and forest structure ---
     let mut domains: Vec<String> = domains_input
         .iter()
         .map(|d| d.trim().trim_end_matches('.').to_lowercase())
@@ -52,7 +51,6 @@ pub(super) fn print_loot_human(
     }
     forest_roots.sort();
 
-    // --- Build per-domain achievement status ---
     let achievements = build_domain_achievements(state, hashes, credentials);
     let compromised_count = achievements
         .values()
@@ -79,7 +77,6 @@ pub(super) fn print_loot_human(
         .cloned()
         .collect();
 
-    // --- Achievement banner ---
     if state.has_domain_admin || state.has_golden_ticket {
         let mut lines = Vec::new();
         if state.has_domain_admin {
@@ -104,7 +101,6 @@ pub(super) fn print_loot_human(
         println!();
     }
 
-    // --- Domains (single unified section) ---
     if domains.is_empty() {
         println!("Domains: None");
     } else {
@@ -519,10 +515,6 @@ fn print_mitre_techniques(techniques: &[String], timeline_events: &[serde_json::
     }
     println!();
 }
-
-// ---------------------------------------------------------------------------
-// Per-domain compromise helpers
-// ---------------------------------------------------------------------------
 
 /// Resolve a domain to its FQDN using the NetBIOS mapping.
 fn resolve_domain_fqdn(domain: &str, netbios_to_fqdn: &HashMap<String, String>) -> String {

@@ -15,10 +15,6 @@ use super::{
     BLUE_KEY_TIMELINE, BLUE_KEY_USERS, TTL_SECS,
 };
 
-// ---------------------------------------------------------------------------
-// 1. add_evidence
-// ---------------------------------------------------------------------------
-
 /// Add evidence to investigation state.
 ///
 /// Required: `investigation_id`, `evidence_type`, `value`, `source`
@@ -129,10 +125,6 @@ pub async fn add_evidence(args: &Value) -> Result<ToolOutput> {
         )))
     }
 }
-
-// ---------------------------------------------------------------------------
-// 1b. add_evidence_batch
-// ---------------------------------------------------------------------------
 
 /// Add multiple evidence items in a single call using a Redis pipeline.
 ///
@@ -279,7 +271,6 @@ pub async fn add_evidence_batch(args: &Value) -> Result<ToolOutput> {
         )));
     }
 
-    // Execute all HSETNX in a single Redis pipeline round-trip
     let mut pipe = redis::pipe();
     for item in &prepared {
         pipe.cmd("HSETNX")
@@ -333,10 +324,6 @@ pub async fn add_evidence_batch(args: &Value) -> Result<ToolOutput> {
 
     Ok(make_output(&output_lines.join("\n")))
 }
-
-// ---------------------------------------------------------------------------
-// 2. record_timeline_event
-// ---------------------------------------------------------------------------
 
 /// Record a timeline event for the investigation.
 ///
@@ -409,10 +396,6 @@ pub async fn record_timeline_event(args: &Value) -> Result<ToolOutput> {
     )))
 }
 
-// ---------------------------------------------------------------------------
-// 3. add_technique
-// ---------------------------------------------------------------------------
-
 /// Record a MITRE ATT&CK technique observed during investigation.
 ///
 /// Required: `investigation_id`, `technique_id`
@@ -455,10 +438,6 @@ pub async fn add_technique(args: &Value) -> Result<ToolOutput> {
         )))
     }
 }
-
-// ---------------------------------------------------------------------------
-// 4. add_lateral_connection
-// ---------------------------------------------------------------------------
 
 /// Record a lateral movement connection between hosts.
 ///
@@ -522,10 +501,6 @@ pub async fn add_lateral_connection(args: &Value) -> Result<ToolOutput> {
     )))
 }
 
-// ---------------------------------------------------------------------------
-// 5. transition_stage
-// ---------------------------------------------------------------------------
-
 /// Transition investigation to a new stage.
 ///
 /// Required: `investigation_id`, `new_stage`
@@ -558,10 +533,6 @@ pub async fn transition_stage(args: &Value) -> Result<ToolOutput> {
         "[+] Investigation stage transitioned to: {new_stage}"
     )))
 }
-
-// ---------------------------------------------------------------------------
-// 6. track_host_investigation
-// ---------------------------------------------------------------------------
 
 /// Mark a host as investigated and track it in the investigation state.
 ///
@@ -606,10 +577,6 @@ pub async fn track_host_investigation(args: &Value) -> Result<ToolOutput> {
         )))
     }
 }
-
-// ---------------------------------------------------------------------------
-// 7. track_user_investigation
-// ---------------------------------------------------------------------------
 
 /// Mark a user as investigated and track them in the investigation state.
 ///

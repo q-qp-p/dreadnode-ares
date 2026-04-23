@@ -112,7 +112,6 @@ pub async fn auto_stall_detection(
         last_recovery = Instant::now();
         recovery_attempts += 1;
 
-        // --- Fallback 1: Password spray with discovered users ---
         // Skip domains with pending delegation vulns — sprays lock delegation
         // accounts and prevent S4U exploitation from succeeding.
         // Also respect strategy gate — don't spray when excluded.
@@ -191,7 +190,6 @@ pub async fn auto_stall_detection(
             }
         }
 
-        // --- Fallback 2: Low-hanging fruit (SYSVOL, GPP, LDAP descriptions, LAPS) ---
         if has_creds && has_dcs {
             let lhf_work: Vec<(String, String, String, ares_core::models::Credential)> = {
                 let state = dispatcher.state.read().await;

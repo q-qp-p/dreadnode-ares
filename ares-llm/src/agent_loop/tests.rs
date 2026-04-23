@@ -223,7 +223,6 @@ fn trim_conversation_disabled() {
 
 #[test]
 fn trim_conversation_drops_middle() {
-    // Create a conversation that exceeds the limit
     let mut messages = Vec::new();
     messages.push(ChatMessage::text(Role::User, "task prompt"));
     for i in 0..20 {

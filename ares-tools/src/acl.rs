@@ -13,10 +13,6 @@ use crate::credentials;
 use crate::executor::CommandBuilder;
 use crate::ToolOutput;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 /// Convert a domain name to an LDAP base DN.
 ///
 /// e.g. `"contoso.local"` -> `"DC=contoso,DC=local"`
@@ -27,10 +23,6 @@ fn domain_to_base_dn(domain: &str) -> String {
         .collect::<Vec<_>>()
         .join(",")
 }
-
-// ---------------------------------------------------------------------------
-// 1. bloodyAD — add group member
-// ---------------------------------------------------------------------------
 
 /// Add a user to a group via `bloodyAD add groupMember`.
 ///
@@ -56,10 +48,6 @@ pub async fn bloodyad_add_group_member(args: &Value) -> Result<ToolOutput> {
         .await
 }
 
-// ---------------------------------------------------------------------------
-// 2. bloodyAD — set password
-// ---------------------------------------------------------------------------
-
 /// Set a user's password via `bloodyAD set password`.
 ///
 /// Required args: `domain`, `username`, `password`, `dc_ip`, `target_user`, `new_password`
@@ -84,10 +72,6 @@ pub async fn bloodyad_set_password(args: &Value) -> Result<ToolOutput> {
         .await
 }
 
-// ---------------------------------------------------------------------------
-// 3. bloodyAD — add GenericAll
-// ---------------------------------------------------------------------------
-
 /// Grant GenericAll rights via `bloodyAD add genericAll`.
 ///
 /// Required args: `domain`, `username`, `password`, `dc_ip`, `target_dn`, `principal`
@@ -111,10 +95,6 @@ pub async fn bloodyad_add_genericall(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// 4. AdminSDHolder ACE addition
-// ---------------------------------------------------------------------------
 
 /// Add an ACL entry to the AdminSDHolder container via `bloodyAD add aclEntry`.
 ///
@@ -145,10 +125,6 @@ pub async fn adminsd_holder_add_ace(args: &Value) -> Result<ToolOutput> {
         .await
 }
 
-// ---------------------------------------------------------------------------
-// 5. gMSA password read via bloodyAD
-// ---------------------------------------------------------------------------
-
 /// Read a gMSA account's managed password via `bloodyAD get object`.
 ///
 /// Required args: `domain`, `username`, `password`, `dc_ip`, `gmsa_account`
@@ -172,10 +148,6 @@ pub async fn gmsa_read_password_bloodyad(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// 6. pywhisker — Shadow Credentials
-// ---------------------------------------------------------------------------
 
 /// Manipulate msDS-KeyCredentialLink via `pywhisker.py`.
 ///
@@ -201,10 +173,6 @@ pub async fn pywhisker(args: &Value) -> Result<ToolOutput> {
         .await
 }
 
-// ---------------------------------------------------------------------------
-// 7. Targeted Kerberoast
-// ---------------------------------------------------------------------------
-
 /// Perform targeted Kerberoasting via `targetedKerberoast.py`.
 ///
 /// Required args: `domain`, `username`, `password`, `dc_ip`, `target_user`
@@ -225,10 +193,6 @@ pub async fn targeted_kerberoast(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// 8. SharpGPOAbuse
-// ---------------------------------------------------------------------------
 
 /// Abuse Group Policy Objects via `SharpGPOAbuse.exe` (run through mono on Linux).
 ///
@@ -261,10 +225,6 @@ pub async fn sharpgpoabuse(args: &Value) -> Result<ToolOutput> {
         .await
 }
 
-// ---------------------------------------------------------------------------
-// 9. pygpoabuse — GPO immediate task
-// ---------------------------------------------------------------------------
-
 /// Create an immediate scheduled task via GPO abuse with `pygpoabuse`.
 ///
 /// Required args: `domain`, `username`, `password`, `gpo_id`, `command`, `dc_ip`
@@ -293,10 +253,6 @@ pub async fn pygpoabuse_immediate_task(args: &Value) -> Result<ToolOutput> {
         .await
 }
 
-// ---------------------------------------------------------------------------
-// 10. dacledit — DACL editing
-// ---------------------------------------------------------------------------
-
 /// Edit DACLs via `dacledit.py`.
 ///
 /// Required args: `domain`, `username`, `password`, `dc_ip`, `principal`, `rights`, `target_dn`
@@ -324,10 +280,6 @@ pub async fn dacl_edit(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -839,5 +791,152 @@ mod tests {
         let target =
             credentials::impacket_target(None, "admin", Some("P@ssw0rd!"), "192.168.58.10");
         assert_eq!(target, "admin:P@ssw0rd!@192.168.58.10");
+    }
+
+    // ── domain_to_base_dn edge cases ──────────────────────────────────
+
+    #[test]
+    fn domain_to_base_dn_empty_string() {
+        assert_eq!(domain_to_base_dn(""), "DC=");
+    }
+
+    #[test]
+    fn domain_to_base_dn_child_domain() {
+        assert_eq!(
+            domain_to_base_dn("child.contoso.local"),
+            "DC=child,DC=contoso,DC=local"
+        );
+    }
+
+    // ── adminsd_holder_dn with nested domains ─────────────────────────
+
+    #[test]
+    fn adminsd_holder_dn_nested_domain() {
+        let base_dn = domain_to_base_dn("child.contoso.local");
+        let adminsd_dn = format!("CN=AdminSDHolder,CN=System,{base_dn}");
+        assert_eq!(
+            adminsd_dn,
+            "CN=AdminSDHolder,CN=System,DC=child,DC=contoso,DC=local"
+        );
+    }
+
+    // ── sharpgpoabuse action_flag formatting ──────────────────────────
+
+    #[test]
+    fn sharpgpoabuse_custom_action_flag() {
+        let args = json!({
+            "gpo_name": "Default Domain Policy",
+            "domain": "contoso.local",
+            "username": "admin",
+            "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.10",
+            "action": "AddComputerTask"
+        });
+        let action = optional_str(&args, "action").unwrap_or("AddLocalAdmin");
+        let action_flag = format!("--{action}");
+        assert_eq!(action_flag, "--AddComputerTask");
+    }
+
+    use crate::executor::mock;
+
+    #[tokio::test]
+    async fn bloodyad_add_group_member_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "group": "Domain Admins", "target_user": "jsmith"
+        });
+        assert!(super::bloodyad_add_group_member(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn bloodyad_set_password_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "target_user": "victim", "new_password": "NewP@ss!"
+        });
+        assert!(super::bloodyad_set_password(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn bloodyad_add_genericall_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "target_dn": "CN=Users,DC=contoso,DC=local", "principal": "jsmith"
+        });
+        assert!(super::bloodyad_add_genericall(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn adminsd_holder_add_ace_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "principal": "jsmith"
+        });
+        assert!(super::adminsd_holder_add_ace(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn gmsa_read_password_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "gmsa_account": "svc_web$"
+        });
+        assert!(super::gmsa_read_password_bloodyad(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn pywhisker_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "target_samaccountname": "dc01$"
+        });
+        assert!(super::pywhisker(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn targeted_kerberoast_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "target_user": "svc_sql"
+        });
+        assert!(super::targeted_kerberoast(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn sharpgpoabuse_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "gpo_name": "Default Domain Policy", "domain": "contoso.local",
+            "username": "admin", "password": "P@ssw0rd!", "dc_ip": "192.168.58.1"
+        });
+        assert!(super::sharpgpoabuse(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn pygpoabuse_immediate_task_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "gpo_id": "{6AC1786C}", "command": "whoami", "dc_ip": "192.168.58.1"
+        });
+        assert!(super::pygpoabuse_immediate_task(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn dacl_edit_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "domain": "contoso.local", "username": "admin", "password": "P@ssw0rd!",
+            "dc_ip": "192.168.58.1", "principal": "jsmith", "rights": "FullControl",
+            "target_dn": "CN=Users,DC=contoso,DC=local"
+        });
+        assert!(super::dacl_edit(&args).await.is_ok());
     }
 }

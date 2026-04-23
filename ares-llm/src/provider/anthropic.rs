@@ -32,10 +32,6 @@ impl AnthropicProvider {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Anthropic API types (request)
-// ---------------------------------------------------------------------------
-
 #[derive(Serialize)]
 struct ApiRequest {
     model: String,
@@ -87,10 +83,6 @@ struct ApiTool {
     input_schema: serde_json::Value,
 }
 
-// ---------------------------------------------------------------------------
-// Anthropic API types (response)
-// ---------------------------------------------------------------------------
-
 #[derive(Deserialize)]
 struct ApiResponse {
     content: Vec<ApiResponseBlock>,
@@ -132,10 +124,6 @@ struct ApiErrorDetail {
     error_type: String,
     message: String,
 }
-
-// ---------------------------------------------------------------------------
-// Conversions
-// ---------------------------------------------------------------------------
 
 fn convert_message(msg: &ChatMessage) -> ApiMessage {
     let role = match msg.role {
@@ -194,10 +182,6 @@ fn parse_stop_reason(reason: Option<&str>) -> StopReason {
         None => StopReason::EndTurn,
     }
 }
-
-// ---------------------------------------------------------------------------
-// LlmProvider implementation
-// ---------------------------------------------------------------------------
 
 #[async_trait::async_trait]
 impl LlmProvider for AnthropicProvider {
@@ -328,10 +312,6 @@ fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<u64> {
         .and_then(|s| s.parse::<f64>().ok())
         .map(|secs| (secs * 1000.0) as u64)
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

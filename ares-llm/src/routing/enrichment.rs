@@ -167,8 +167,6 @@ mod tests {
         }
     }
 
-    // --- enrich_delegation_payload ---
-
     #[test]
     fn enrich_delegation_payload_adds_password() {
         let creds = vec![make_cred("svc_sql", "contoso.local", "SvcP@ss1")];
@@ -211,8 +209,6 @@ mod tests {
         enrich_delegation_payload(&mut payload, "unconstrained_delegation", &creds, &[]);
         assert_eq!(payload["domain"], "contoso.local");
     }
-
-    // --- resolve_dc_for_payload ---
 
     #[test]
     fn resolve_dc_skips_if_already_set() {

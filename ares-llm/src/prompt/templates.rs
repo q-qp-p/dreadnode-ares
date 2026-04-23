@@ -9,10 +9,6 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use tera::{Context, Tera};
 
-// ---------------------------------------------------------------------------
-// Embedded templates — agent instruction templates (system prompts)
-// ---------------------------------------------------------------------------
-
 const RECON_TEMPLATE: &str = include_str!("../../templates/redteam/agents/recon.md.tera");
 const CREDENTIAL_ACCESS_TEMPLATE: &str =
     include_str!("../../templates/redteam/agents/credential_access.md.tera");
@@ -25,10 +21,6 @@ const ORCHESTRATOR_TEMPLATE: &str =
     include_str!("../../templates/redteam/agents/orchestrator.md.tera");
 const SYSTEM_INSTRUCTIONS_TEMPLATE: &str =
     include_str!("../../templates/redteam/agents/system_instructions.md.tera");
-
-// ---------------------------------------------------------------------------
-// Embedded templates — special-purpose templates (user prompts from Jinja2)
-// ---------------------------------------------------------------------------
 
 const INITIAL_TASK_TEMPLATE: &str =
     include_str!("../../templates/redteam/agents/initial_task.md.tera");
@@ -45,10 +37,6 @@ const SHARE_PILFER_INSTRUCTIONS_TEMPLATE: &str =
 const SHARE_PILFER_TASK_TEMPLATE: &str =
     include_str!("../../templates/redteam/agents/share_pilfer_task.md.tera");
 
-// ---------------------------------------------------------------------------
-// Embedded templates — per-task-type prompt templates (from prompts.py)
-// ---------------------------------------------------------------------------
-
 const TASK_RECON_TEMPLATE: &str = include_str!("../../templates/redteam/tasks/recon.md.tera");
 const TASK_CRACK_TEMPLATE: &str = include_str!("../../templates/redteam/tasks/crack.md.tera");
 const TASK_LATERAL_TEMPLATE: &str = include_str!("../../templates/redteam/tasks/lateral.md.tera");
@@ -58,10 +46,6 @@ const TASK_PRIVESC_ENUMERATION_TEMPLATE: &str =
 const TASK_ACL_ANALYSIS_TEMPLATE: &str =
     include_str!("../../templates/redteam/tasks/acl_analysis.md.tera");
 const TASK_COMMAND_TEMPLATE: &str = include_str!("../../templates/redteam/tasks/command.md.tera");
-
-// ---------------------------------------------------------------------------
-// Embedded templates — exploit task templates
-// ---------------------------------------------------------------------------
 
 const TASK_EXPLOIT_ADCS_ENUMERATE_TEMPLATE: &str =
     include_str!("../../templates/redteam/tasks/exploit_adcs_enumerate.md.tera");
@@ -82,10 +66,6 @@ const TASK_EXPLOIT_UNCONSTRAINED_TEMPLATE: &str =
 const TASK_EXPLOIT_GOLDEN_TICKET_TEMPLATE: &str =
     include_str!("../../templates/redteam/tasks/exploit_golden_ticket.md.tera");
 
-// ---------------------------------------------------------------------------
-// Embedded templates — credential access task templates
-// ---------------------------------------------------------------------------
-
 const TASK_CREDACCESS_KERBEROS_TEMPLATE: &str =
     include_str!("../../templates/redteam/tasks/credaccess_kerberos.md.tera");
 const TASK_CREDACCESS_LOW_HANGING_WITH_CREDS_TEMPLATE: &str =
@@ -102,10 +82,6 @@ const TASK_CREDACCESS_WITH_CREDS_TEMPLATE: &str =
     include_str!("../../templates/redteam/tasks/credaccess_with_creds.md.tera");
 const TASK_CREDACCESS_FALLBACK_TEMPLATE: &str =
     include_str!("../../templates/redteam/tasks/credaccess_fallback.md.tera");
-
-// ---------------------------------------------------------------------------
-// Embedded templates — blue team agent instruction templates
-// ---------------------------------------------------------------------------
 
 #[cfg(feature = "blue")]
 const BLUE_TRIAGE_TEMPLATE: &str = include_str!("../../templates/blueteam/agents/triage.md.tera");
@@ -125,10 +101,6 @@ const BLUE_ESCALATION_TRIAGE_TEMPLATE: &str =
 const BLUE_INITIAL_ALERT_PROMPT_TEMPLATE: &str =
     include_str!("../../templates/blueteam/agents/initial_alert_prompt.md.tera");
 
-// ---------------------------------------------------------------------------
-// Embedded templates — blue team task templates
-// ---------------------------------------------------------------------------
-
 #[cfg(feature = "blue")]
 const BLUE_TASK_TRIAGE_TEMPLATE: &str =
     include_str!("../../templates/blueteam/tasks/triage_task.md.tera");
@@ -144,10 +116,6 @@ const BLUE_TASK_USER_INVESTIGATION_TEMPLATE: &str =
 #[cfg(feature = "blue")]
 const BLUE_TASK_HOST_INVESTIGATION_TEMPLATE: &str =
     include_str!("../../templates/blueteam/tasks/host_investigation_task.md.tera");
-
-// ---------------------------------------------------------------------------
-// Template name constants
-// ---------------------------------------------------------------------------
 
 // Agent instruction templates (used as system prompts)
 pub const TEMPLATE_RECON: &str = "redteam/agents/recon";
@@ -226,10 +194,6 @@ pub const BLUE_TASK_LATERAL: &str = "blueteam/tasks/lateral_task";
 pub const BLUE_TASK_USER_INVESTIGATION: &str = "blueteam/tasks/user_investigation_task";
 #[cfg(feature = "blue")]
 pub const BLUE_TASK_HOST_INVESTIGATION: &str = "blueteam/tasks/host_investigation_task";
-
-// ---------------------------------------------------------------------------
-// Global Tera instance
-// ---------------------------------------------------------------------------
 
 /// Global Tera instance with all agent templates registered.
 static TEMPLATES: LazyLock<Tera> = LazyLock::new(|| {
@@ -355,10 +319,6 @@ static TEMPLATES: LazyLock<Tera> = LazyLock::new(|| {
     tera
 });
 
-// ---------------------------------------------------------------------------
-// Render functions
-// ---------------------------------------------------------------------------
-
 /// Render an agent instruction template with the given context variables.
 ///
 /// Used for role-based system prompts (recon, credential_access, cracker, etc.)
@@ -453,10 +413,6 @@ pub fn render_task_template(
     }
     render_template_with_context(template_name, &ctx)
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

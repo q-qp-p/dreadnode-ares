@@ -126,8 +126,6 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // --- is_pass_the_hash_compatible ---
-
     #[test]
     fn pth_compat_lm_nt() {
         assert!(is_pass_the_hash_compatible(Some(
@@ -172,8 +170,6 @@ mod tests {
         )));
     }
 
-    // --- payload_techniques ---
-
     #[test]
     fn payload_techniques_present() {
         let payload = json!({"techniques": ["network_scan", "user_enumeration"]});
@@ -194,8 +190,6 @@ mod tests {
         let techs = payload_techniques(&payload);
         assert!(techs.is_empty());
     }
-
-    // --- cred_param_str ---
 
     #[test]
     fn cred_param_str_password() {
@@ -242,8 +236,6 @@ mod tests {
         assert_eq!(cred_param_str(&payload, Some("aabb")), "hashes='aabb'");
     }
 
-    // --- cred_display_str ---
-
     #[test]
     fn cred_display_str_password() {
         let payload = json!({"password": "Secret123"});
@@ -270,8 +262,6 @@ mod tests {
         let payload = json!({});
         assert_eq!(cred_display_str(&payload, None), "N/A");
     }
-
-    // --- insert_credential_context ---
 
     #[test]
     fn insert_credential_context_with_password() {

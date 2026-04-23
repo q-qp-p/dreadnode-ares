@@ -58,8 +58,6 @@ mod tests {
         m
     }
 
-    // --- normalize_domain ---
-
     #[test]
     fn normalize_domain_fqdn_passthrough() {
         let map = make_map();
@@ -102,8 +100,6 @@ mod tests {
         let map = make_map();
         assert_eq!(normalize_domain("", &map), "");
     }
-
-    // --- hostname_matches_domain ---
 
     #[test]
     fn hostname_matches_domain_basic() {

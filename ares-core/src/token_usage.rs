@@ -28,10 +28,6 @@ use redis::AsyncCommands;
 /// Redis HASH field prefix for per-model counters.
 const MODEL_PREFIX: &str = "model";
 
-// ---------------------------------------------------------------------------
-// Data types
-// ---------------------------------------------------------------------------
-
 /// Token usage counters for a single LLM call.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TokenUsage {
@@ -59,10 +55,6 @@ pub struct ModelTokenUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
 }
-
-// ---------------------------------------------------------------------------
-// Cost estimation — static pricing table (no litellm in Rust)
-// ---------------------------------------------------------------------------
 
 /// Per-model pricing: (input_cost_per_million, output_cost_per_million) in USD.
 ///
@@ -170,10 +162,6 @@ fn lookup_model_cost(model: &str) -> Option<(f64, f64)> {
     }
     None
 }
-
-// ---------------------------------------------------------------------------
-// Redis operations — Python-compatible
-// ---------------------------------------------------------------------------
 
 /// Build the Redis key for an operation's token usage HASH.
 pub fn token_usage_key(operation_id: &str) -> String {
@@ -399,10 +387,6 @@ pub async fn get_token_usage(
         models,
     }))
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

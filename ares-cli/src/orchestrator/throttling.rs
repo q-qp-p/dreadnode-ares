@@ -17,10 +17,6 @@ use tracing::{debug, info, warn};
 use crate::orchestrator::config::OrchestratorConfig;
 use crate::orchestrator::routing::ActiveTaskTracker;
 
-// ---------------------------------------------------------------------------
-// Critical-path classification (matches Python ThrottlingMixin constants)
-// ---------------------------------------------------------------------------
-
 /// Task types that bypass hard-cap throttling (DA-critical path).
 const CRITICAL_PATH_TASK_TYPES: &[&str] = &["exploit"];
 
@@ -40,10 +36,6 @@ const CRITICAL_PATH_VULN_TYPES: &[&str] = &[
 /// Maximum tasks allowed to bypass the hard cap simultaneously.
 const MAX_BYPASS_TASKS: usize = 3;
 
-// ---------------------------------------------------------------------------
-// ThrottleDecision
-// ---------------------------------------------------------------------------
-
 /// What the throttler decided about a candidate task.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThrottleDecision {
@@ -55,16 +47,12 @@ pub enum ThrottleDecision {
     Wait(std::time::Duration),
 }
 
-// ---------------------------------------------------------------------------
-// Throttler
-// ---------------------------------------------------------------------------
-
 /// Concurrency controller that mirrors the Python throttling logic.
-#[allow(dead_code)]
 pub struct Throttler {
     config: Arc<OrchestratorConfig>,
     tracker: ActiveTaskTracker,
-    /// Per-role semaphores (lazily populated).
+    /// Per-role semaphores (lazily populated, used in tests).
+    #[allow(dead_code)]
     role_semaphores: tokio::sync::Mutex<HashMap<String, Arc<Semaphore>>>,
     /// Timestamp of the last successful dispatch.
     last_dispatch: tokio::sync::Mutex<Instant>,
@@ -112,7 +100,6 @@ impl Throttler {
         let max_tasks = self.config.max_concurrent_tasks;
         let hard_cap = self.config.hard_cap();
 
-        // --- HARD CAP (1.5x) ---
         if llm_count >= hard_cap {
             if self.is_critical_path(task_type, payload) {
                 let bypass_count = llm_count.saturating_sub(hard_cap);
@@ -140,7 +127,6 @@ impl Throttler {
             return ThrottleDecision::Defer;
         }
 
-        // --- SOFT CAP ---
         if llm_count >= max_tasks {
             let role_count = self.tracker.count_for_role(target_role).await;
             let min_per_role = 1_usize; // matches get_min_slots_per_role default
@@ -158,7 +144,6 @@ impl Throttler {
             return ThrottleDecision::Defer;
         }
 
-        // --- Dispatch delay ---
         {
             let last = self.last_dispatch.lock().await;
             let elapsed = last.elapsed();
@@ -202,7 +187,7 @@ impl Throttler {
     }
 
     /// Acquire a per-role semaphore permit. Returns a guard that releases on drop.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub async fn acquire_role_permit(
         &self,
         role: &str,
@@ -215,8 +200,6 @@ impl Throttler {
         };
         sem.try_acquire_owned().ok()
     }
-
-    // --- internal ---
 
     fn is_critical_path(&self, task_type: &str, payload: Option<&serde_json::Value>) -> bool {
         // Check exploit + vuln_type

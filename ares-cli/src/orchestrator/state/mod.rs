@@ -16,10 +16,6 @@ mod shared;
 // Re-export everything that was publicly visible from the old single file.
 pub use shared::SharedState;
 
-// ---------------------------------------------------------------------------
-// Dedup set names (match Python `ares:op:{op_id}:dedup:{name}`)
-// ---------------------------------------------------------------------------
-
 pub const DEDUP_CRACK_REQUESTS: &str = "crack_requests";
 pub const DEDUP_SECRETSDUMP: &str = "secretsdump";
 pub const DEDUP_DELEGATION_CREDS: &str = "delegation_creds";

@@ -28,10 +28,6 @@ use serde_json::Value;
 
 pub use state_context::format_state_context;
 
-// ---------------------------------------------------------------------------
-// StateSnapshot — cheap, clonable view of operation state
-// ---------------------------------------------------------------------------
-
 /// A snapshot of operation state used for prompt generation.
 /// Cloned from `SharedState` to avoid holding the RwLock during LLM calls.
 #[derive(Debug, Clone, Default)]
@@ -54,10 +50,6 @@ pub struct StateSnapshot {
     /// credentials for generic auth — they are reserved for S4U.
     pub delegation_accounts: std::collections::HashSet<String>,
 }
-
-// ---------------------------------------------------------------------------
-// Task prompt generation
-// ---------------------------------------------------------------------------
 
 /// Generate a task prompt from a task type and JSON payload.
 ///

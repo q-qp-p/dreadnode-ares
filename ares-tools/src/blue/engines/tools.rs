@@ -11,10 +11,6 @@ use super::data::{attack_chains, detection_recipes, make_output};
 use super::mitre::generate_mitre_questions;
 use super::pyramid::{assess_pyramid, generate_pyramid_questions, EvidenceItem};
 
-// ---------------------------------------------------------------------------
-// Evidence extraction from Redis investigation state
-// ---------------------------------------------------------------------------
-
 pub async fn load_investigation_evidence(
     investigation_id: &str,
 ) -> anyhow::Result<(HashSet<String>, Vec<EvidenceItem>)> {
@@ -62,10 +58,6 @@ pub async fn load_investigation_evidence(
 
     Ok((techniques, evidence_items))
 }
-
-// ---------------------------------------------------------------------------
-// Tool methods
-// ---------------------------------------------------------------------------
 
 /// Generate MITRE-based investigative questions from current investigation state.
 pub async fn generate_mitre_questions_tool(args: &Value) -> anyhow::Result<ToolOutput> {
@@ -315,10 +307,6 @@ pub fn list_detection_recipes(_args: &Value) -> anyhow::Result<ToolOutput> {
         output
     )))
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

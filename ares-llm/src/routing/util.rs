@@ -59,8 +59,6 @@ pub fn extract_host_from_spn(spn: &str) -> Option<String> {
 mod tests {
     use super::*;
 
-    // --- is_pass_the_hash_compatible ---
-
     #[test]
     fn pth_compatible_lm_nt_format() {
         assert!(is_pass_the_hash_compatible(
@@ -104,8 +102,6 @@ mod tests {
         ));
     }
 
-    // --- extract_ticket_path ---
-
     #[test]
     fn extract_ticket_path_saving_format() {
         let output = "[*] Saving ticket in admin.ccache";
@@ -133,8 +129,6 @@ mod tests {
     fn extract_ticket_path_empty() {
         assert_eq!(extract_ticket_path(""), None);
     }
-
-    // --- extract_host_from_spn ---
 
     #[test]
     fn extract_host_from_spn_mssql() {

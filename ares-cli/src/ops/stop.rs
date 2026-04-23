@@ -12,7 +12,6 @@ pub(crate) async fn ops_stop(
 ) -> Result<()> {
     let mut conn = connect_redis(redis_url).await?;
 
-    // Resolve which operation to stop
     let op_id = if let Some(id) = operation_id {
         id
     } else if latest {
@@ -24,14 +23,12 @@ pub(crate) async fn ops_stop(
         bail!("Provide an operation ID or use --latest");
     };
 
-    // Verify it's actually running
     let running = state::list_running_operations(&mut conn).await?;
     if !running.contains(&op_id) {
         println!("Operation {op_id} is not running");
         return Ok(());
     }
 
-    // Send the stop signal
     state::request_stop_operation(&mut conn, &op_id).await?;
     info!("Stop requested for operation {op_id}");
     println!("Stop signal sent to {op_id} — orchestrator will shut down within ~5s");

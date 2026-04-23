@@ -16,15 +16,11 @@ use crate::orchestrator::config::OrchestratorConfig;
 use crate::orchestrator::routing::ActiveTaskTracker;
 use crate::orchestrator::task_queue::TaskQueue;
 
-// ---------------------------------------------------------------------------
-// Agent registry
-// ---------------------------------------------------------------------------
-
 /// Live state for a registered agent.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct AgentState {
     pub name: String,
+    #[allow(dead_code)]
     pub role: String,
     pub status: String,
     pub last_heartbeat: DateTime<Utc>,
@@ -45,7 +41,7 @@ impl AgentRegistry {
     }
 
     /// Register an agent (or update it if already known).
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub async fn register(&self, name: &str, role: &str) {
         let mut agents = self.agents.lock().await;
         agents
@@ -103,10 +99,6 @@ impl AgentRegistry {
         agents.keys().cloned().collect()
     }
 }
-
-// ---------------------------------------------------------------------------
-// Lock keeper — independent task that only refreshes the operation lock
-// ---------------------------------------------------------------------------
 
 /// Spawn a dedicated task that extends the operation lock TTL every
 /// `heartbeat_interval`. This is intentionally decoupled from the heartbeat
@@ -188,10 +180,6 @@ pub fn spawn_lock_keeper(
         }
     })
 }
-
-// ---------------------------------------------------------------------------
-// Heartbeat monitor task
-// ---------------------------------------------------------------------------
 
 /// Spawn a background task that periodically:
 /// 1. Reads heartbeat keys from Redis for all known agents
@@ -341,10 +329,6 @@ async fn cleanup_stale_tasks(
 
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Pre-flight tool check
-// ---------------------------------------------------------------------------
 
 /// Critical tools per worker role. If any of these are missing, operations
 /// will be severely degraded.

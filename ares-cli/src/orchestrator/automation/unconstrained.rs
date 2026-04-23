@@ -34,11 +34,8 @@ const MAX_DUMP_ATTEMPTS: u32 = 3;
 /// Delay between successive dump retries for the same vuln.
 const DUMP_RETRY_DELAY: Duration = Duration::from_secs(60);
 
-// -----------------------------------------------------------------------
 // Phase tracking (in-memory only — intentionally not persisted so restarts
 // re-trigger the chain, since cached TGTs expire quickly).
-// -----------------------------------------------------------------------
-
 #[derive(Debug)]
 struct PhaseState {
     coercion_dispatched_at: Option<Instant>,

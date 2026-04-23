@@ -109,8 +109,6 @@ mod tests {
         }
     }
 
-    // --- extract_kerberoast_spn_key ---
-
     #[test]
     fn extract_spn_key_valid() {
         let hash = "$krb5tgs$23$*svc_sql$CONTOSO.LOCAL$MSSQLSvc/db01.contoso.local*$aabb$ccdd";
@@ -130,8 +128,6 @@ mod tests {
     fn extract_spn_key_too_short() {
         assert_eq!(extract_kerberoast_spn_key("$krb5tgs$"), None);
     }
-
-    // --- dedupe_hashes ---
 
     #[test]
     fn dedupe_ntlm_by_hash_value() {

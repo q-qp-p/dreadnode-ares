@@ -134,7 +134,6 @@ pub fn parse_spray_success(output: &str, params: &Value) -> Vec<Value> {
             continue;
         }
 
-        // Extract the part after [+]
         if let Some(after_plus) = line.split("[+]").nth(1) {
             let after_plus = after_plus.trim();
             // Format: domain\user:password or domain\user password
@@ -239,7 +238,6 @@ pub fn parse_ldap_descriptions(output: &str, params: &Value) -> Vec<Value> {
 
     let mut creds = Vec::new();
 
-    // --- Strategy 1: netexec SMB format (same-line extraction) ---
     for line in output.lines() {
         let line = line.trim();
         if line.is_empty() {
@@ -269,7 +267,6 @@ pub fn parse_ldap_descriptions(output: &str, params: &Value) -> Vec<Value> {
         }
     }
 
-    // --- Strategy 2: LDIF format (two-pass: collect entries, then match) ---
     // LDAP doesn't guarantee attribute order, so we must collect each entry's
     // sAMAccountName and description before matching passwords.
     if creds.is_empty() {

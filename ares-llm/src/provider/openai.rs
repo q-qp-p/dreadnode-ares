@@ -33,10 +33,6 @@ impl OpenAiProvider {
     }
 }
 
-// ---------------------------------------------------------------------------
-// OpenAI API types (request)
-// ---------------------------------------------------------------------------
-
 #[derive(Serialize)]
 struct ApiRequest {
     model: String,
@@ -96,10 +92,6 @@ struct ApiToolFunction {
     parameters: serde_json::Value,
 }
 
-// ---------------------------------------------------------------------------
-// OpenAI API types (response)
-// ---------------------------------------------------------------------------
-
 #[derive(Deserialize)]
 struct ApiResponse {
     choices: Vec<ApiChoice>,
@@ -148,10 +140,6 @@ struct ApiErrorDetail {
     error_type: Option<String>,
 }
 
-// ---------------------------------------------------------------------------
-// Conversions
-// ---------------------------------------------------------------------------
-
 fn convert_message(msg: &ChatMessage) -> ApiMessage {
     let role = match msg.role {
         Role::System => "system",
@@ -180,7 +168,6 @@ fn convert_message(msg: &ChatMessage) -> ApiMessage {
         }
     }
 
-    // Handle assistant messages with tool calls
     if msg.role == Role::Assistant {
         if let Some(ref parts) = msg.parts {
             let mut text_parts = Vec::new();
@@ -260,10 +247,6 @@ fn uses_max_completion_tokens(model: &str) -> bool {
     let model = model.strip_prefix("openai/").unwrap_or(model);
     model.starts_with("gpt-5")
 }
-
-// ---------------------------------------------------------------------------
-// LlmProvider implementation
-// ---------------------------------------------------------------------------
 
 #[async_trait::async_trait]
 impl LlmProvider for OpenAiProvider {
@@ -413,10 +396,6 @@ impl LlmProvider for OpenAiProvider {
         "openai"
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

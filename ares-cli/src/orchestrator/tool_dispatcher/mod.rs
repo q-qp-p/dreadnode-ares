@@ -27,10 +27,6 @@ pub use auth_throttle::AuthThrottle;
 pub use local::LocalToolDispatcher;
 pub use redis_dispatcher::RedisToolDispatcher;
 
-// ---------------------------------------------------------------------------
-// Wire format
-// ---------------------------------------------------------------------------
-
 /// Message pushed to the tool execution queue.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ToolExecRequest {
@@ -57,10 +53,6 @@ pub struct ToolExecResponse {
     pub discoveries: Option<serde_json::Value>,
 }
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 /// Prefix for tool execution request queues.
 pub(super) const TOOL_EXEC_PREFIX: &str = "ares:tool_exec";
 
@@ -74,10 +66,6 @@ pub(super) const RESULT_TTL_SECS: u64 = 3600;
 /// Must exceed queue wait time + longest tool runtime (hashcat can queue
 /// behind another hashcat, so 2x runtime + buffer).
 pub(super) const DEFAULT_TOOL_TIMEOUT_SECS: u64 = 1500;
-
-// ---------------------------------------------------------------------------
-// Dispatcher helpers
-// ---------------------------------------------------------------------------
 
 /// Tools that require netexec/ldapsearch and must be routed to the recon
 /// worker queue regardless of the calling agent's role.

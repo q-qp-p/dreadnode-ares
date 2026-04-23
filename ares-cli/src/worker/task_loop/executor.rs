@@ -239,8 +239,6 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    // --- normalize_params ---
-
     #[test]
     fn normalize_params_target_ip_to_target() {
         let params = json!({"target_ip": "192.168.58.10"});
@@ -288,8 +286,6 @@ mod tests {
         assert_eq!(norm["domain"], "fabrikam.local"); // not overwritten
     }
 
-    // --- map_technique_to_tool ---
-
     #[test]
     fn map_technique_to_tool_mapped() {
         assert_eq!(map_technique_to_tool("network_scan"), "nmap_scan");
@@ -319,8 +315,6 @@ mod tests {
         assert_eq!(map_technique_to_tool("kerberoast"), "kerberoast");
     }
 
-    // --- expand_task ---
-
     #[test]
     fn expand_task_recon_with_techniques() {
         let params = json!({"techniques": ["network_scan", "user_enumeration"], "target_ip": "192.168.58.10"});
@@ -347,8 +341,6 @@ mod tests {
         assert!(tools.is_empty());
     }
 
-    // --- expand_crack_task ---
-
     #[test]
     fn expand_crack_task_default_hashcat() {
         let params = json!({"hash_value": "abc123", "hash_type": "ntlm"});
@@ -363,8 +355,6 @@ mod tests {
         let tools = expand_crack_task(&params);
         assert_eq!(tools[0].0, "crack_with_john");
     }
-
-    // --- expand_exploit_task ---
 
     #[test]
     fn expand_exploit_delegation() {

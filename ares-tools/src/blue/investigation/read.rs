@@ -13,10 +13,6 @@ use super::{
     BLUE_KEY_TIMELINE, BLUE_KEY_USERS,
 };
 
-// ---------------------------------------------------------------------------
-// 8. list_evidence
-// ---------------------------------------------------------------------------
-
 /// List all evidence items grouped by Pyramid of Pain level.
 ///
 /// Required: `investigation_id`
@@ -38,7 +34,6 @@ pub async fn list_evidence(args: &Value) -> Result<ToolOutput> {
         return Ok(make_output("No evidence recorded yet."));
     }
 
-    // Parse and group by pyramid level
     let level_names = [
         (1, "Hash Values"),
         (2, "IP Addresses"),
@@ -99,10 +94,6 @@ pub async fn list_evidence(args: &Value) -> Result<ToolOutput> {
     Ok(make_output(&lines.join("\n")))
 }
 
-// ---------------------------------------------------------------------------
-// 9. get_investigation_context (for escalation triage)
-// ---------------------------------------------------------------------------
-
 /// Get full investigation context for escalation triage evaluation.
 ///
 /// Returns a comprehensive view of the investigation state including evidence,
@@ -127,7 +118,6 @@ pub async fn get_investigation_context(args: &Value) -> Result<ToolOutput> {
         )));
     }
 
-    // Read all state
     let meta: std::collections::HashMap<String, String> = conn.hgetall(&meta_key).await?;
     let stage = meta
         .get("stage")
@@ -295,10 +285,6 @@ fn infer_capability(technique_id: &str) -> &'static str {
         _ => "",
     }
 }
-
-// ---------------------------------------------------------------------------
-// 10. get_investigation_summary
-// ---------------------------------------------------------------------------
 
 pub async fn get_investigation_summary(args: &Value) -> Result<ToolOutput> {
     let investigation_id = required_str(args, "investigation_id")?;

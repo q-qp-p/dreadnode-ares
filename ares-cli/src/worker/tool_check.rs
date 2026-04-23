@@ -129,12 +129,10 @@ mod tests {
         }
     }
 
-    // ---------------------------------------------------------------
     // Per-role expected tool assertions.
     //
     // These validate that tools.yaml contains the expected tools.
     // When Ansible provisioning changes, update tools.yaml.
-    // ---------------------------------------------------------------
 
     #[test]
     fn recon_has_expected_tools() {

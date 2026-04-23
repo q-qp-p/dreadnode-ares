@@ -22,7 +22,6 @@ pub(crate) fn ops_evaluate(
     let output_path = Path::new(&output_dir);
 
     if let Some(ref dir) = states_dir {
-        // Dataset mode: evaluate all state files in directory
         let dir_path = Path::new(dir);
         if !dir_path.exists() {
             anyhow::bail!("States directory does not exist: {dir}");
@@ -42,7 +41,6 @@ pub(crate) fn ops_evaluate(
             dir
         );
 
-        // Evaluate each scenario with detailed output
         for scenario in &dataset.scenarios {
             match evaluate_scenario(scenario) {
                 Ok(output) => {
@@ -71,7 +69,6 @@ pub(crate) fn ops_evaluate(
             }
         }
 
-        // Print aggregate summary
         let dataset_result =
             evaluate_dataset(&dataset).context("Failed to aggregate dataset results")?;
 
@@ -83,7 +80,6 @@ pub(crate) fn ops_evaluate(
             println!("{}", dataset_result.to_summary());
         }
     } else if let Some(ref file) = state_file {
-        // Single file mode
         let path = Path::new(file);
         if !path.exists() {
             anyhow::bail!("State file does not exist: {file}");

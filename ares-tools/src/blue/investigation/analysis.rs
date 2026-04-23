@@ -14,10 +14,6 @@ use super::{
     BLUE_KEY_USERS,
 };
 
-// ---------------------------------------------------------------------------
-// 11. get_suggested_evidence
-// ---------------------------------------------------------------------------
-
 /// Get auto-extracted IOCs from recent query results as evidence suggestions.
 pub fn get_suggested_evidence(_args: &Value) -> Result<ToolOutput> {
     let iocs = evidence_validator::get_suggested_iocs();
@@ -46,10 +42,6 @@ pub fn get_suggested_evidence(_args: &Value) -> Result<ToolOutput> {
 
     Ok(make_output(&lines.join("\n")))
 }
-
-// ---------------------------------------------------------------------------
-// 12. analyze_lateral_movement
-// ---------------------------------------------------------------------------
 
 /// Analyze lateral movement graph from investigation state.
 ///
@@ -241,10 +233,6 @@ pub async fn analyze_lateral_movement(args: &Value) -> Result<ToolOutput> {
     Ok(make_output(&parts.join("\n")))
 }
 
-// ---------------------------------------------------------------------------
-// 13. get_correlated_alerts
-// ---------------------------------------------------------------------------
-
 /// Get alert correlation context from investigation metadata.
 ///
 /// Required: `investigation_id`
@@ -373,10 +361,6 @@ pub async fn get_correlated_alerts(args: &Value) -> Result<ToolOutput> {
     Ok(make_output(&parts.join("\n")))
 }
 
-// ---------------------------------------------------------------------------
-// 14. get_queued_queries
-// ---------------------------------------------------------------------------
-
 /// Get auto-queued pivot and chain queries from the investigation.
 ///
 /// Required: `investigation_id`
@@ -446,10 +430,6 @@ pub async fn get_queued_queries(args: &Value) -> Result<ToolOutput> {
 
     Ok(make_output(&parts.join("\n")))
 }
-
-// ---------------------------------------------------------------------------
-// 15. get_formatted_summary (rate-limited progress view)
-// ---------------------------------------------------------------------------
 
 /// Get a formatted investigation summary with progress indicators.
 /// Rate-limited to 30 seconds to prevent polling loops.
@@ -589,10 +569,6 @@ pub async fn get_formatted_summary(args: &Value) -> Result<ToolOutput> {
     Ok(make_output(&output))
 }
 
-// ---------------------------------------------------------------------------
-// Queue pop tools (pivot & chain queues)
-// ---------------------------------------------------------------------------
-
 const BLUE_KEY_PIVOT_QUEUE: &str = "pivot_queue";
 const BLUE_KEY_CHAIN_QUEUE: &str = "chain_queue";
 
@@ -620,7 +596,6 @@ pub async fn pop_all_queued(args: &Value) -> Result<ToolOutput> {
         .await
         .unwrap_or_default();
 
-    // Delete the queues after reading
     if !pivots.is_empty() {
         let _: () = conn.del(&pivot_key).await.unwrap_or_default();
     }

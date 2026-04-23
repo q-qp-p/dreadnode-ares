@@ -17,10 +17,6 @@ pub use domain::normalize_domain;
 pub use enrichment::{enrich_delegation_payload, resolve_dc_for_payload};
 pub use util::{extract_host_from_spn, extract_ticket_path, is_pass_the_hash_compatible};
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -62,8 +58,6 @@ mod tests {
         }
     }
 
-    // --- Domain normalization ---
-
     #[test]
     fn normalize_domain_fqdn() {
         let map = sample_netbios_map();
@@ -83,8 +77,6 @@ mod tests {
         let map = sample_netbios_map();
         assert_eq!(normalize_domain("UNKNOWN", &map), "unknown");
     }
-
-    // --- Hostname matching ---
 
     #[test]
     fn hostname_matches_domain() {
@@ -109,8 +101,6 @@ mod tests {
         assert!(!domain::hostname_matches_domain("", "contoso.local"));
         assert!(!domain::hostname_matches_domain("dc01.contoso.local", ""));
     }
-
-    // --- DC indicator checks ---
 
     #[test]
     fn has_dc_role() {
@@ -150,8 +140,6 @@ mod tests {
         assert!(!dc_discovery::has_dc_services(&rdp_only));
     }
 
-    // --- Credential lookup ---
-
     #[test]
     fn finds_domain_credential() {
         let map = sample_netbios_map();
@@ -163,8 +151,6 @@ mod tests {
         let found = find_domain_credential("CONTOSO", &creds, &map, &trusts).unwrap();
         assert_eq!(found.username, "admin"); // Prefers one with password
     }
-
-    // --- Multi-tier DC discovery ---
 
     #[test]
     fn find_dc_ip_tier0_cached() {
@@ -312,8 +298,6 @@ mod tests {
         assert!(result.is_none());
     }
 
-    // --- Payload enrichment ---
-
     #[test]
     fn enrich_delegation_payload_credential() {
         let creds = vec![make_cred("svc_sql", "contoso.local", "SqlPass1")];
@@ -363,8 +347,6 @@ mod tests {
         resolve_dc_for_payload(&mut payload, &[], &HashMap::new(), &HashMap::new(), None);
         assert_eq!(payload["dc_ip"].as_str(), Some("192.168.58.1")); // unchanged
     }
-
-    // --- Utility ---
 
     #[test]
     fn pass_the_hash_compatibility() {

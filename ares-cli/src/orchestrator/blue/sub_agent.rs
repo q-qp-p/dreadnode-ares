@@ -15,10 +15,6 @@ use ares_llm::{CallbackHandler, TokenUsage, ToolCall, ToolDispatcher, ToolExecRe
 
 use super::callbacks::BlueCallbackHandler;
 
-// ---------------------------------------------------------------------------
-// Blue-aware tool dispatcher wrapper
-// ---------------------------------------------------------------------------
-
 /// Timeout for individual blue tool executions (e.g. Loki/Grafana queries).
 /// `execute_parallel_queries` runs up to 5 queries (2 concurrent), each with
 /// a 90s HTTP timeout and up to 2 retries — worst-case ~540s.  Give headroom.
@@ -82,10 +78,6 @@ impl ToolDispatcher for BlueToolDispatcher {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Sub-agent callback handler (lifecycle callbacks only)
-// ---------------------------------------------------------------------------
 
 /// Minimal callback handler for blue sub-agents (triage, threat_hunter, etc.).
 ///

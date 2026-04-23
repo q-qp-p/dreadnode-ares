@@ -19,18 +19,12 @@ use ares_llm::{
 
 use crate::orchestrator::state::SharedState;
 
-// ---------------------------------------------------------------------------
-// LLM task runner
-// ---------------------------------------------------------------------------
-
 /// Drives LLM-powered tasks through the Rust agent loop.
 ///
 /// Owns an LLM provider and tool dispatcher, and builds prompts from
 /// the current operation state.
-#[allow(dead_code)]
 pub struct LlmTaskRunner {
     provider: Box<dyn LlmProvider>,
-    model_name: String,
     dispatcher: Arc<dyn ToolDispatcher>,
     state: SharedState,
     config: AgentLoopConfig,
@@ -52,13 +46,12 @@ impl LlmTaskRunner {
         technique_priorities: Vec<(String, i32)>,
     ) -> Self {
         let config = AgentLoopConfig {
-            model: model_name.clone(),
+            model: model_name,
             temperature,
             ..AgentLoopConfig::default()
         };
         Self {
             provider,
-            model_name,
             dispatcher,
             state,
             config,
@@ -165,10 +158,6 @@ impl LlmTaskRunner {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Prompt building helpers
-// ---------------------------------------------------------------------------
-
 /// Build the system prompt for a given agent role.
 fn build_system_prompt(
     role: AgentRole,
@@ -257,10 +246,6 @@ pub fn role_for_task_type(task_type: &str) -> Option<AgentRole> {
         _ => None,
     }
 }
-
-// ---------------------------------------------------------------------------
-// Logging
-// ---------------------------------------------------------------------------
 
 fn log_outcome(task_id: &str, outcome: &AgentLoopOutcome) {
     match &outcome.reason {

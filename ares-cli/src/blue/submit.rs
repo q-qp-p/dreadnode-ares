@@ -20,7 +20,6 @@ pub(crate) async fn blue_submit(
     grafana_url: Option<String>,
     grafana_api_key: Option<String>,
 ) -> Result<()> {
-    // Parse alert JSON: either from file or inline string
     let alert: serde_json::Value = if std::path::Path::new(&alert_json).is_file() {
         let content = std::fs::read_to_string(&alert_json)
             .with_context(|| format!("Failed to read alert file: {alert_json}"))?;
@@ -99,7 +98,6 @@ pub(crate) async fn blue_from_operation(
     let mut conn = connect_redis(redis_url.clone()).await?;
     let op_id = resolve_operation_id(&mut conn, operation_id, latest).await?;
 
-    // Load the red team operation state
     let reader = RedisStateReader::new(op_id.clone());
     let state = reader
         .load_state(&mut conn)
@@ -108,7 +106,6 @@ pub(crate) async fn blue_from_operation(
 
     let is_running = reader.is_running(&mut conn).await?;
 
-    // Extract attack window
     let window_start = state.started_at;
     let window_end = state.completed_at.unwrap_or_else(Utc::now);
 
@@ -139,14 +136,12 @@ pub(crate) async fn blue_from_operation(
 
     let env_vars = collect_env_vars(BLUE_ENV_VAR_NAMES);
 
-    // Build operation context that will be attached to each investigation
     let target_env = state
         .target
         .as_ref()
         .map(|t| t.environment.clone())
         .unwrap_or_default();
 
-    // Collect attack techniques from state
     let techniques_key = format!("ares:op:{op_id}:techniques");
     let techniques: Vec<String> = redis::cmd("SMEMBERS")
         .arg(&techniques_key)
@@ -162,12 +157,10 @@ pub(crate) async fn blue_from_operation(
         "deployment": target_env,
     });
 
-    // Build summary of what was found in the operation
     let cred_count = state.all_credentials.len();
     let host_count = state.all_hosts.len();
     let vuln_count = state.discovered_vulnerabilities.len();
 
-    // Collect host IPs and usernames from operation for alert context
     let target_ips: Vec<String> = state.all_hosts.iter().map(|h| h.ip.clone()).collect();
     let target_users: Vec<String> = state
         .all_credentials
@@ -175,7 +168,6 @@ pub(crate) async fn blue_from_operation(
         .map(|c| c.username.clone())
         .collect();
 
-    // Generate a synthetic alert from the red team operation data
     let alert = serde_json::json!({
         "labels": {
             "alertname": format!("RedTeamOperation_{}", op_id),
@@ -202,7 +194,6 @@ pub(crate) async fn blue_from_operation(
         "target_users": &target_users[..std::cmp::min(target_users.len(), 50)],
     });
 
-    // Submit as a single multi-agent investigation
     let now = Utc::now();
     let inv_id = format!("inv-{}", now.format("%Y%m%d-%H%M%S"));
 
@@ -228,13 +219,11 @@ pub(crate) async fn blue_from_operation(
         let _: () = conn.expire(&env_vars_key, 3600).await?;
     }
 
-    // Push to investigation queue
     let request_json = serde_json::to_string(&request)?;
     let _: () = conn
         .rpush("ares:blue:investigations", &request_json)
         .await?;
 
-    // Track investigation against operation
     let op_inv_key = format!("ares:blue:op:{op_id}:investigations");
     let _: () = conn.sadd(&op_inv_key, &inv_id).await?;
     let _: () = conn.expire(&op_inv_key, 7 * 24 * 3600).await?; // 7 day TTL

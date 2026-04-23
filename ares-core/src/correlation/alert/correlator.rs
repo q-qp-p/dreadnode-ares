@@ -83,7 +83,6 @@ impl AlertCorrelator {
             }
         }
 
-        // Create new cluster
         self.cluster_counter += 1;
         let cluster_id = format!("cluster-{:04}", self.cluster_counter);
         let mut new_cluster = AlertCluster::new(cluster_id.clone());

@@ -167,8 +167,6 @@ mod tests {
         assert!(find_domain_credential("contoso.local", &creds, &map, &trusts).is_none());
     }
 
-    // --- Trust-scope validation tests ---
-
     #[test]
     fn same_domain_valid() {
         let trusts = HashMap::new();

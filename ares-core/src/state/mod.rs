@@ -109,6 +109,9 @@ pub fn build_blue_lock_key(investigation_id: &str) -> String {
     format!("{BLUE_LOCK_PREFIX}:{investigation_id}")
 }
 
+#[cfg(any(test, feature = "test-utils"))]
+pub mod mock_redis;
+
 #[cfg(test)]
 mod tests {
     use super::*;

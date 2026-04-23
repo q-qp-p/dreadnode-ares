@@ -20,10 +20,6 @@ const UNVALIDATED_PENALTY: f64 = 0.15;
 /// Maximum suggested IOCs to return.
 const MAX_SUGGESTED_IOCS: usize = 50;
 
-// ---------------------------------------------------------------------------
-// Stored query result
-// ---------------------------------------------------------------------------
-
 struct StoredQueryResult {
     query_id: String,
     extracted_values: HashSet<String>,
@@ -43,10 +39,6 @@ fn state() -> &'static Mutex<ValidatorState> {
         })
     })
 }
-
-// ---------------------------------------------------------------------------
-// Compiled regex patterns (lazy)
-// ---------------------------------------------------------------------------
 
 fn ipv4_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -108,10 +100,6 @@ fn sha256_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"\b([a-fA-F0-9]{64})\b").unwrap())
 }
 
-// ---------------------------------------------------------------------------
-// File extension exclusion list for hostname matching
-// ---------------------------------------------------------------------------
-
 const EXCLUDED_EXTENSIONS: &[&str] = &[
     ".exe", ".dll", ".sys", ".msi", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".log", ".txt", ".xml",
     ".json", ".ini", ".cfg", ".tmp",
@@ -142,10 +130,6 @@ fn is_hostname_like(value: &str) -> bool {
     }
     true
 }
-
-// ---------------------------------------------------------------------------
-// IOC extraction from raw text
-// ---------------------------------------------------------------------------
 
 /// Extract IOC values from a text string (query result output).
 fn extract_iocs_from_text(text: &str) -> HashSet<String> {
@@ -252,10 +236,6 @@ fn extract_iocs_from_text(text: &str) -> HashSet<String> {
 
     values
 }
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /// Store a query result and extract IOCs for later validation.
 ///
@@ -391,10 +371,6 @@ fn classify_ioc(value: &str) -> Option<&'static str> {
 
     None
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

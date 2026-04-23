@@ -61,8 +61,6 @@ mod tests {
         assert_eq!(sid, Some("S-1-5-21-100-200-300".to_string()));
     }
 
-    // --- extract_rid500_name ---
-
     #[test]
     fn extract_rid500_name_standard() {
         let output = "[*] Domain SID is: S-1-5-21-1328384573-4090356449-2552632942\n\

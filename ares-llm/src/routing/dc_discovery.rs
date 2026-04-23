@@ -7,10 +7,6 @@ use ares_core::models::Host;
 
 use super::domain::{hostname_matches_domain, normalize_domain};
 
-// ---------------------------------------------------------------------------
-// DC indicator checks
-// ---------------------------------------------------------------------------
-
 /// DC role markers in host roles (case-insensitive substrings).
 pub(crate) const DC_ROLE_MARKERS: &[&str] =
     &["dc", "domain controller", "ad dc", "domaincontroller"];
@@ -51,10 +47,6 @@ pub(crate) fn has_dc_services(host: &Host) -> bool {
     }
     false
 }
-
-// ---------------------------------------------------------------------------
-// Multi-tier DC discovery
-// ---------------------------------------------------------------------------
 
 /// Full multi-tier DC IP discovery.
 ///
@@ -283,8 +275,6 @@ mod tests {
         }
     }
 
-    // --- has_dc_role ---
-
     #[test]
     fn has_dc_role_explicit_flag() {
         let host = make_host("192.168.58.10", "dc01", true, vec![]);
@@ -303,8 +293,6 @@ mod tests {
         let host = make_host("192.168.58.20", "srv01", false, vec![]);
         assert!(!has_dc_role(&host));
     }
-
-    // --- has_dc_services ---
 
     #[test]
     fn has_dc_services_kerberos_port() {
@@ -340,8 +328,6 @@ mod tests {
         );
         assert!(!has_dc_services(&host));
     }
-
-    // --- find_dc_ip ---
 
     #[test]
     fn find_dc_ip_tier0_cached() {
@@ -455,8 +441,6 @@ mod tests {
         assert!(!d.should_cache);
     }
 
-    // --- find_dc_ip_cached ---
-
     #[test]
     fn find_dc_ip_cached_hit() {
         let mut dc_map = HashMap::new();
@@ -474,8 +458,6 @@ mod tests {
             None
         );
     }
-
-    // --- DcTier Display ---
 
     #[test]
     fn dc_tier_display() {

@@ -6,9 +6,6 @@ use crate::ToolDefinition;
 
 pub fn definitions() -> Vec<ToolDefinition> {
     vec![
-        // -----------------------------------------------------------------
-        // Golden ticket / SID tools
-        // -----------------------------------------------------------------
         ToolDefinition {
             name: "generate_golden_ticket".into(),
             description: "Create a Kerberos golden ticket using a compromised krbtgt hash. \
@@ -76,9 +73,6 @@ pub fn definitions() -> Vec<ToolDefinition> {
                 "required": ["child_domain", "username"]
             }),
         },
-        // -----------------------------------------------------------------
-        // Trust / Cross-forest tools
-        // -----------------------------------------------------------------
         ToolDefinition {
             name: "extract_trust_key".into(),
             description: "Extract the inter-domain trust key from a domain controller using \

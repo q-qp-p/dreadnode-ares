@@ -22,10 +22,6 @@ use ares_llm::{
     ToolDispatcher, ToolExecResult,
 };
 
-// ---------------------------------------------------------------------------
-// Mock LLM provider — returns a scripted sequence of responses
-// ---------------------------------------------------------------------------
-
 struct MockProvider {
     step: AtomicU32,
 }
@@ -85,10 +81,6 @@ impl LlmProvider for MockProvider {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Mock tool dispatcher — returns canned tool output
-// ---------------------------------------------------------------------------
-
 struct MockDispatcher;
 
 #[async_trait::async_trait]
@@ -127,10 +119,6 @@ impl ToolDispatcher for MockDispatcher {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 #[tokio::main]
 async fn main() -> Result<()> {

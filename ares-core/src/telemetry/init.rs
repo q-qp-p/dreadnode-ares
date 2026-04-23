@@ -126,10 +126,6 @@ pub fn shutdown_telemetry(guard: &mut TelemetryGuard) {
     guard.shutdown();
 }
 
-// ---------------------------------------------------------------------------
-// Internal
-// ---------------------------------------------------------------------------
-
 /// Attempt to build an OTLP span exporter + tracer provider. Returns `None` if
 /// no OTLP endpoint is configured (neither `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
 /// nor `OTEL_EXPORTER_OTLP_ENDPOINT`).

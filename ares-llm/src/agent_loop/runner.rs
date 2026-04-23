@@ -196,7 +196,6 @@ pub async fn run_agent_loop(
             continue;
         }
 
-        // Add assistant message with tool calls to conversation history
         messages.push(ChatMessage::assistant_tool_use(
             if response.content.is_empty() {
                 None

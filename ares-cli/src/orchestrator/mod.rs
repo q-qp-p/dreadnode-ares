@@ -68,7 +68,6 @@ async fn run_inner() -> Result<()> {
         "ares-orchestrator starting"
     );
 
-    // --- Blue-only mode: skip red orchestrator, just run blue investigation poller ---
     #[cfg(feature = "blue")]
     if std::env::var("ARES_BLUE_ONLY").as_deref() == Ok("1") {
         return run_blue_only().await;
@@ -349,7 +348,6 @@ async fn run_inner() -> Result<()> {
         "LLM runner initialized — Rust drives all agent loops"
     );
 
-    // --- Central dispatcher ---
     let dispatcher = Arc::new(Dispatcher::new(
         queue.clone(),
         tracker.clone(),
@@ -361,7 +359,6 @@ async fn run_inner() -> Result<()> {
         llm_runner.clone(),
     ));
 
-    // --- Wire orchestrator callback handler ---
     // Deferred initialization: the handler needs the dispatcher, which contains
     // the llm_runner, creating a circular dependency. OnceLock breaks the cycle.
     let callback_handler = Arc::new(
@@ -371,10 +368,7 @@ async fn run_inner() -> Result<()> {
     llm_runner.set_callback_handler(callback_handler);
     info!("Orchestrator callback handler wired (query + dispatch tools)");
 
-    // --- Shutdown signal ---
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
-
-    // --- Spawn background tasks ---
 
     // Core infrastructure — lock keeper runs independently to prevent
     // lock expiry even if heartbeat sweeps or Redis calls hang.
@@ -428,10 +422,8 @@ async fn run_inner() -> Result<()> {
             async move { automation::state_refresh(refresh_disp, refresh_shutdown).await },
         );
 
-    // --- Automation tasks ---
     let auto_handles = spawn_automation_tasks(dispatcher.clone(), shutdown_rx.clone());
 
-    // --- Blue team orchestrator (optional — enabled when ARES_BLUE_ENABLED=1) ---
     // Inject observability URLs from YAML config into env vars (blue tools read env vars).
     #[cfg(feature = "blue")]
     if let Some(ref cfg) = ares_config {
@@ -495,7 +487,6 @@ async fn run_inner() -> Result<()> {
     #[cfg(not(feature = "blue"))]
     let blue_handle: Option<(tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()>)> = None;
 
-    // --- Recovery check ---
     {
         let recovery_mgr = recovery::OperationRecoveryManager::new(config.redis_url.clone());
         match recovery_mgr.recover(&config.operation_id).await {
@@ -516,7 +507,6 @@ async fn run_inner() -> Result<()> {
         }
     }
 
-    // --- Clear stale stop signal ---
     // On restart (e.g. re-running with BLUE_ENABLED after a completed op),
     // the previous run's stop signal may still be in Redis. Clear it so the
     // main loop doesn't exit immediately.
@@ -526,7 +516,6 @@ async fn run_inner() -> Result<()> {
         let _: Result<(), _> = redis::AsyncCommands::del(&mut conn, &stop_key).await;
     }
 
-    // --- Completion monitor ---
     let completion_disp = dispatcher.clone();
     let completion_state = shared_state.clone();
     let completion_shutdown = shutdown_rx.clone();
@@ -554,7 +543,6 @@ async fn run_inner() -> Result<()> {
         "Orchestration loop started — all background tasks running"
     );
 
-    // --- Pre-flight tool availability check ---
     // Wait briefly for workers to start and publish their tool inventories,
     // then warn loudly about any critical missing tools.
     {
@@ -573,7 +561,6 @@ async fn run_inner() -> Result<()> {
         }
     }
 
-    // --- Dispatch initial reconnaissance (seeds the reactive automation pipeline) ---
     if !config.target_ips.is_empty() {
         let recon_count = dispatch_initial_recon(&dispatcher, &config).await;
         info!(tasks = recon_count, "Initial recon dispatched");
@@ -581,7 +568,6 @@ async fn run_inner() -> Result<()> {
         warn!("No target IPs configured — skipping initial recon dispatch");
     }
 
-    // --- Main loop ---
     let mut stop_check = tokio::time::interval(std::time::Duration::from_secs(5));
     stop_check.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -636,7 +622,6 @@ async fn run_inner() -> Result<()> {
         }
     }
 
-    // --- Graceful shutdown ---
     info!("Shutting down background tasks...");
     let _ = shutdown_tx.send(true);
 
@@ -670,7 +655,6 @@ async fn run_inner() -> Result<()> {
         }
     }
 
-    // --- Finalize operation in Redis ---
     // Write completion metadata, status key, clear lock and active pointer.
     // Matches Python's operation completion sequence.
     {

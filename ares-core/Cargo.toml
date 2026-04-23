@@ -39,8 +39,9 @@ rstest = "0.26"
 approx = "0.5"
 
 [features]
-default = []
+default = ["blue"]
 blue = []
+test-utils = []
 telemetry = [
     "opentelemetry",
     "opentelemetry_sdk",

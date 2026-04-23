@@ -14,24 +14,13 @@
 //! - **State normalization** -- fixes NetBIOS -> FQDN domain mismatches on
 //!   credentials and hashes, persists corrections back to Redis.
 //! - **Connection error detection** with retry logic.
-//! - **`OperationResumeHelper`** -- analysis methods for post-recovery summary.
-
 mod dedup;
 mod manager;
 mod normalize;
 mod requeue;
-mod resume_helper;
 mod types;
 
-// Re-export all public items at the same paths they had before the split.
-// Allow unused -- these re-exports document the module API and are needed by
-// tests and by main.rs (OperationRecoveryManager). The remaining types are
-// returned from public methods and would be needed by any future library consumer.
 pub use manager::OperationRecoveryManager;
-#[allow(unused_imports)]
-pub use resume_helper::OperationResumeHelper;
-#[allow(unused_imports)]
-pub use types::{InterruptedTask, RecoveredState, RetryingTask};
 
 // Items that were module-private in the original single file; re-exported
 // here only for intra-crate use and tests.
@@ -39,10 +28,6 @@ pub use types::{InterruptedTask, RecoveredState, RetryingTask};
 pub(crate) use dedup::dedupe_hashes;
 #[allow(unused_imports)]
 pub(crate) use normalize::{normalize_credential_domains, normalize_hash_domains, resolve_domain};
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -69,8 +54,6 @@ mod tests {
             aes_key: None,
         }
     }
-
-    // --- Hash dedup tests ---
 
     #[test]
     fn dedupe_asrep_by_domain_username() {
@@ -256,8 +239,6 @@ mod tests {
         assert_eq!(result.len(), 1, "Case-insensitive dedup for AS-REP");
     }
 
-    // --- Retry limit tests ---
-
     #[test]
     fn retry_limit_not_exceeded() {
         let task = TaskInfo {
@@ -305,8 +286,6 @@ mod tests {
             "Task with retry_count=3 after increment should exceed max"
         );
     }
-
-    // --- State normalization tests ---
 
     #[test]
     fn normalize_credential_domains_netbios_to_fqdn() {
@@ -405,8 +384,6 @@ mod tests {
         );
     }
 
-    // --- Kerberoast SPN extraction ---
-
     #[test]
     fn extract_kerberoast_spn_key_valid() {
         let hash = "$krb5tgs$23$*svc_sql$CONTOSO.LOCAL$MSSQLSvc/db01.contoso.local*$chk$enc";
@@ -420,8 +397,6 @@ mod tests {
         assert!(extract_kerberoast_spn_key("$krb5tgs$").is_none());
         assert!(extract_kerberoast_spn_key("$krb5tgs$23$nope").is_none());
     }
-
-    // --- Connection error detection ---
 
     #[test]
     fn connection_error_detection() {

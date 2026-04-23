@@ -259,10 +259,6 @@ impl Strategy {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Preset weight maps
-// ---------------------------------------------------------------------------
-
 /// Fast: prioritize secretsdump and golden ticket. ADCS and ACL are fallbacks.
 fn fast_weights() -> HashMap<String, i32> {
     [
@@ -380,10 +376,6 @@ fn stealth_weights() -> HashMap<String, i32> {
     .collect()
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 /// Parse a technique list from a JSON value (array of strings) or env var (comma-separated).
 fn parse_technique_list(json_val: Option<&serde_json::Value>, env_key: &str) -> HashSet<String> {
     let mut set = HashSet::new();
@@ -407,10 +399,6 @@ fn parse_technique_list(json_val: Option<&serde_json::Value>, env_key: &str) -> 
 
     set
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

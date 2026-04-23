@@ -8,10 +8,8 @@ pub mod analysis;
 pub mod read;
 pub mod write;
 
-// ---------------------------------------------------------------------------
 // Redis key constants (mirrored from ares-core/src/state/keys.rs to avoid
 // adding ares-core as a dependency of ares-tools)
-// ---------------------------------------------------------------------------
 
 pub(super) const BLUE_KEY_PREFIX: &str = "ares:blue:inv";
 pub(super) const BLUE_KEY_EVIDENCE: &str = "evidence";
@@ -29,10 +27,6 @@ pub(super) fn blue_key(investigation_id: &str, suffix: &str) -> String {
     format!("{BLUE_KEY_PREFIX}:{investigation_id}:{suffix}")
 }
 
-// ---------------------------------------------------------------------------
-// Redis connection helper
-// ---------------------------------------------------------------------------
-
 pub(super) async fn get_redis_connection() -> anyhow::Result<redis::aio::MultiplexedConnection> {
     use anyhow::Context;
     let url = std::env::var("ARES_REDIS_URL")
@@ -46,10 +40,6 @@ pub(super) async fn get_redis_connection() -> anyhow::Result<redis::aio::Multipl
         .context("failed to connect to Redis")?;
     Ok(conn)
 }
-
-// ---------------------------------------------------------------------------
-// Output helpers
-// ---------------------------------------------------------------------------
 
 pub(super) fn make_output(body: &str) -> crate::ToolOutput {
     crate::ToolOutput {
@@ -68,10 +58,6 @@ pub(super) fn make_error(msg: &str) -> crate::ToolOutput {
         success: false,
     }
 }
-
-// ---------------------------------------------------------------------------
-// Re-exports — keep the public API identical to when this was one file
-// ---------------------------------------------------------------------------
 
 pub use write::{
     add_evidence, add_evidence_batch, add_lateral_connection, add_technique, record_timeline_event,

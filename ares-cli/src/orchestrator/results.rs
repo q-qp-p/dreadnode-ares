@@ -16,20 +16,12 @@ use crate::orchestrator::config::OrchestratorConfig;
 use crate::orchestrator::routing::ActiveTaskTracker;
 use crate::orchestrator::task_queue::{TaskQueue, TaskResult};
 
-// ---------------------------------------------------------------------------
-// CompletedTask — sent over the channel to the main loop
-// ---------------------------------------------------------------------------
-
 /// A completed task result, ready for the orchestrator to process.
 #[derive(Debug)]
 pub struct CompletedTask {
     pub task_id: String,
     pub result: TaskResult,
 }
-
-// ---------------------------------------------------------------------------
-// Result consumer
-// ---------------------------------------------------------------------------
 
 /// Spawn the result-consumer background task.
 ///

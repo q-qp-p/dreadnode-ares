@@ -240,10 +240,6 @@ pub struct LlmResponse {
     pub usage: TokenUsage,
 }
 
-// ---------------------------------------------------------------------------
-// Provider trait
-// ---------------------------------------------------------------------------
-
 /// Model-agnostic LLM provider.
 #[async_trait::async_trait]
 pub trait LlmProvider: Send + Sync {
@@ -253,10 +249,6 @@ pub trait LlmProvider: Send + Sync {
     /// Provider name (e.g. "anthropic", "openai", "ollama").
     fn name(&self) -> &str;
 }
-
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
 
 /// Parse a model string like "anthropic/claude-sonnet-4-20250514" and create
 /// the appropriate provider + extracted model name.
@@ -301,10 +293,6 @@ pub fn create_provider(model: &str) -> anyhow::Result<(Box<dyn LlmProvider>, Str
         Ok((Box::new(provider), model.to_string()))
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -366,5 +354,75 @@ mod tests {
         };
         let json = serde_json::to_value(&tool).unwrap();
         assert_eq!(json["name"], "nmap_scan");
+    }
+
+    #[test]
+    fn llm_error_is_retryable() {
+        assert!(LlmError::RateLimited {
+            retry_after_ms: None
+        }
+        .is_retryable());
+        assert!(LlmError::RateLimited {
+            retry_after_ms: Some(1000)
+        }
+        .is_retryable());
+        assert!(LlmError::Network("connection refused".into()).is_retryable());
+        assert!(LlmError::ApiError {
+            status: 500,
+            message: "internal server error".into()
+        }
+        .is_retryable());
+        assert!(LlmError::ApiError {
+            status: 503,
+            message: "unavailable".into()
+        }
+        .is_retryable());
+        assert!(!LlmError::ApiError {
+            status: 400,
+            message: "bad request".into()
+        }
+        .is_retryable());
+        assert!(!LlmError::ApiError {
+            status: 404,
+            message: "not found".into()
+        }
+        .is_retryable());
+        assert!(!LlmError::AuthError("invalid key".into()).is_retryable());
+        assert!(!LlmError::ContextTooLong("prompt too long".into()).is_retryable());
+    }
+
+    #[test]
+    fn llm_error_retry_after_ms() {
+        // RateLimited with explicit value propagates it.
+        assert_eq!(
+            LlmError::RateLimited {
+                retry_after_ms: Some(3000)
+            }
+            .retry_after_ms(),
+            Some(3000),
+        );
+        // RateLimited with None returns None.
+        assert_eq!(
+            LlmError::RateLimited {
+                retry_after_ms: None
+            }
+            .retry_after_ms(),
+            None,
+        );
+        // All other variants return None.
+        assert_eq!(LlmError::Network("timeout".into()).retry_after_ms(), None);
+        assert_eq!(
+            LlmError::ApiError {
+                status: 503,
+                message: "overloaded".into()
+            }
+            .retry_after_ms(),
+            None,
+        );
+        assert_eq!(LlmError::AuthError("bad key".into()).retry_after_ms(), None);
+        assert_eq!(
+            LlmError::ContextTooLong("too big".into()).retry_after_ms(),
+            None
+        );
     }
 }
