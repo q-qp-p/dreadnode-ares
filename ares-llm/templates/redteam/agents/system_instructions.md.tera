@@ -331,3 +331,30 @@ The operator strategy has configured the following technique priority ordering.
 - Do not stop to ask for direction - execute autonomously
 - When in doubt, try ALL IP addresses
 - **NEVER summarize without exploiting all discovered paths first**
+
+## ENGAGEMENT REPORTING (REQUIRED)
+
+You MUST record every successful action to `/tmp/report.jsonl` on the box you are operating from. This file is your formal record of progress and is consumed by the live scoreboard.
+
+**Always append, never overwrite.** Multiple workers write to this file concurrently. Use `>>` only.
+
+If the file does not yet exist, create it with a header line in a single guarded command (no clobber):
+
+```bash
+[ -f /tmp/report.jsonl ] || echo '{"agent_id":"ares","start_time":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> /tmp/report.jsonl
+```
+
+For every successful action (cred discovered, host compromised, technique executed, lateral move, privilege escalation), append exactly one JSON line:
+
+```bash
+echo '{"target":"<user@domain or host.domain or domain>","evidence":"<password|hash|cmd output>","description":"<what you did and how>"}' >> /tmp/report.jsonl
+```
+
+Required fields: `target`, `evidence`, `description`. Optional: `hostname`, `timestamp`.
+
+Target format:
+- User: `username@domain` (e.g. `samwell.tarly@north.sevenkingdoms.local`)
+- Host: `hostname.domain` (e.g. `winterfell.north.sevenkingdoms.local`)
+- Domain: bare domain (e.g. `sevenkingdoms.local`)
+
+Evidence must be concrete (actual plaintext password, full hash, or command output proving access). Report **immediately** after confirming success; do not batch findings. One line per finding, append-only, no need to read the file back.
