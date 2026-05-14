@@ -220,20 +220,134 @@ async fn run_pivot_probe(dispatcher: Arc<Dispatcher>, item: PivotWork) {
         .dispatch_tool("lateral", &task_id, &call)
         .await;
 
-    let outcome = match result {
-        Ok(exec) => {
-            if let Some(err) = exec.error {
-                ProbeOutcome::ToolError(err, exec.output)
-            } else if probe_output_is_remote_select(&exec.output) {
-                ProbeOutcome::Confirmed(exec.output)
-            } else {
-                ProbeOutcome::NoEvidence(exec.output)
-            }
+    let outcome = classify_probe_result(&result);
+
+    // Cross-forest fallback: when `EXEC AT [link]` fails with a shape that
+    // looks like Kerberos double-hop / SSPI rejection, retry the same
+    // probe through `OPENQUERY([link], ...)` which uses the linked
+    // server's stored `sp_addlinkedsrvlogin` mapping and bypasses
+    // delegation entirely. This is the canonical cross-forest pivot
+    // path documented in `auto_mssql_exploitation` (the LLM prompt
+    // already names it, but the deterministic chain never tried it).
+    let outcome = match outcome {
+        ProbeOutcome::Confirmed(o) => ProbeOutcome::Confirmed(o),
+        other if probe_failure_is_cross_forest_shape(&other) => {
+            info!(
+                vuln_id = %item.vuln_id,
+                target = %item.target_ip,
+                linked_server = %item.linked_server,
+                first_summary = %describe_outcome(&other),
+                "MSSQL link pivot: EXEC AT failed with cross-forest auth shape — \
+                 retrying via OPENQUERY (stored linked-login mapping bypasses double-hop)"
+            );
+            run_openquery_fallback(&dispatcher, &item, other).await
         }
-        Err(e) => ProbeOutcome::DispatchFailure(e.to_string()),
+        other => other,
     };
 
     handle_probe_outcome(&dispatcher, &item, outcome).await;
+}
+
+/// Wrap the `dispatch_tool` result into a `ProbeOutcome` according to the
+/// `mssql_exec_linked` / `mssql_openquery` contract: tool error → ToolError,
+/// stdout matches the probe column header → Confirmed, otherwise NoEvidence.
+/// Extracted so the EXEC AT and OPENQUERY paths share one classifier.
+fn classify_probe_result(result: &anyhow::Result<ares_llm::ToolExecResult>) -> ProbeOutcome {
+    match result {
+        Ok(exec) => {
+            if let Some(err) = exec.error.clone() {
+                ProbeOutcome::ToolError(err, exec.output.clone())
+            } else if probe_output_is_remote_select(&exec.output) {
+                ProbeOutcome::Confirmed(exec.output.clone())
+            } else {
+                ProbeOutcome::NoEvidence(exec.output.clone())
+            }
+        }
+        Err(e) => ProbeOutcome::DispatchFailure(e.to_string()),
+    }
+}
+
+/// Cross-forest signature on a failed `mssql_exec_linked` probe. The
+/// `EXEC AT [link]` hop double-hops the principal's identity to the linked
+/// server, which a cross-forest trust does not allow without explicit
+/// Kerberos delegation. The resulting SQL Server error surface is narrow
+/// and stable across versions:
+///   - `Login failed for user '<domain>\<user>'` — SQL accepted the
+///     source-side connection then rejected the cross-link auth
+///   - `Cannot generate SSPI context` — Kerberos failed to materialise a
+///     service ticket for the linked server (the classic double-hop tell)
+///   - `SSPI handshake failed` — same root cause, surface from newer
+///     impacket / SQL builds
+///   - `KDC_ERR_*` — explicit Kerberos error punted up by impacket's
+///     krb5 stack
+///   - `the trust relationship between this workstation and the primary
+///     domain failed` — surfaces on older SQL builds
+///
+/// We deliberately keep this narrow: a generic "remote query is disabled"
+/// or "linked server does not exist" should NOT trigger the OPENQUERY
+/// retry — those are configuration issues on the link, not auth issues
+/// that OPENQUERY's stored-cred path could route around.
+fn probe_failure_is_cross_forest_shape(outcome: &ProbeOutcome) -> bool {
+    let (err, out) = match outcome {
+        ProbeOutcome::ToolError(e, o) => (e.as_str(), o.as_str()),
+        ProbeOutcome::NoEvidence(o) => ("", o.as_str()),
+        // DispatchFailure is a transport / queue error — not an auth
+        // shape, so OPENQUERY wouldn't help. Bail.
+        ProbeOutcome::DispatchFailure(_) | ProbeOutcome::Confirmed(_) => return false,
+    };
+    let blob = format!("{err}\n{out}").to_ascii_lowercase();
+    blob.contains("login failed for user")
+        || blob.contains("cannot generate sspi context")
+        || blob.contains("sspi handshake failed")
+        || blob.contains("kdc_err_")
+        || blob.contains("the trust relationship")
+        || blob.contains("double-hop")
+        || blob.contains("delegation not permitted")
+}
+
+/// Dispatch the OPENQUERY fallback after EXEC AT failed cross-forest. The
+/// same `PROBE_QUERY` flows through `OPENQUERY([link], '<query>')` which
+/// rides the stored remote login (`sp_addlinkedsrvlogin`) instead of
+/// double-hopping the connecting principal's identity. If OPENQUERY also
+/// fails, return the first-attempt outcome so the failure summary in
+/// `handle_probe_outcome` stays the more diagnostic EXEC AT error.
+async fn run_openquery_fallback(
+    dispatcher: &Dispatcher,
+    item: &PivotWork,
+    first_outcome: ProbeOutcome,
+) -> ProbeOutcome {
+    let tool_args = build_probe_args(item);
+    let task_id = format!(
+        "mssql_link_pivot_oq_{}",
+        &uuid::Uuid::new_v4().simple().to_string()[..12]
+    );
+    let call = ToolCall {
+        id: format!("mssql_openquery_{}", uuid::Uuid::new_v4().simple()),
+        name: "mssql_openquery".to_string(),
+        arguments: tool_args,
+    };
+
+    let result = dispatcher
+        .llm_runner
+        .tool_dispatcher()
+        .dispatch_tool("lateral", &task_id, &call)
+        .await;
+
+    let oq_outcome = classify_probe_result(&result);
+    if matches!(oq_outcome, ProbeOutcome::Confirmed(_)) {
+        info!(
+            vuln_id = %item.vuln_id,
+            linked_server = %item.linked_server,
+            "MSSQL link pivot: OPENQUERY fallback confirmed cross-forest hop \
+             (stored linked-login mapping); EXEC AT was blocked by double-hop"
+        );
+        oq_outcome
+    } else {
+        // OPENQUERY didn't surface evidence either. Surface the first
+        // attempt's outcome so the failure summary captures the EXEC AT
+        // error (more diagnostic than OPENQUERY's "no rows" line).
+        first_outcome
+    }
 }
 
 #[derive(Debug)]
@@ -317,6 +431,32 @@ fn resolve_linked_server_host_ip(state: &StateInner, linked_server: &str) -> Opt
         .map(|h| h.ip.clone())
 }
 
+/// Credit the scoreboard primitive for a confirmed link pivot. The
+/// deterministic probe dispatches via `dispatch_tool` (task_id
+/// `mssql_link_pivot_*`), bypassing the `exploit_*` gate in
+/// result_processing — so the standard mark_exploited path never fires
+/// for this vuln_id even when the chain confirmed an end-to-end remote
+/// SELECT. Without this explicit call,
+/// `mssql_linked_server_<ip>_<server>` scoreboard tokens are emitted
+/// only by the LLM-routed mssql_exploitation path; the deterministic
+/// confirmation here goes uncredited.
+async fn credit_pivot_exploited(
+    state: &SharedState,
+    queue: &crate::orchestrator::task_queue::TaskQueueCore<
+        impl redis::aio::ConnectionLike + Clone + Send + Sync + 'static,
+    >,
+    vuln_id: &str,
+) {
+    if let Err(e) = state.mark_exploited(queue, vuln_id).await {
+        warn!(
+            err = %e,
+            vuln_id = %vuln_id,
+            "Failed to mark mssql_linked_server exploited \
+             (probe confirmed but token not emitted)"
+        );
+    }
+}
+
 async fn handle_probe_outcome(dispatcher: &Dispatcher, item: &PivotWork, outcome: ProbeOutcome) {
     match outcome {
         ProbeOutcome::Confirmed(output) => {
@@ -336,6 +476,8 @@ async fn handle_probe_outcome(dispatcher: &Dispatcher, item: &PivotWork, outcome
                 let mut state = dispatcher.state.write().await;
                 state.mssql_link_pivot_attempts.remove(&item.dedup_key);
             }
+
+            credit_pivot_exploited(&dispatcher.state, &dispatcher.queue, &item.vuln_id).await;
 
             // When the link hop runs as sysadmin on the remote SQL Server, the
             // resulting principal can xp_cmdshell, which is local-admin-
@@ -717,6 +859,34 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn credit_pivot_exploited_marks_vuln_and_records_event() {
+        // Confirmed probe outcome must mark the linked-server vuln
+        // exploited so dreadgoad's scoreboard credits the primitive even
+        // though the probe dispatched via `dispatch_tool` (which bypasses
+        // the normal `exploit_*` gate in result_processing).
+        use crate::orchestrator::task_queue::TaskQueueCore;
+        use ares_core::models::OpStateEventPayload;
+        use ares_core::state::mock_redis::MockRedisConnection;
+
+        let recorder = std::sync::Arc::new(ares_core::op_state_log::OpStateRecorder::capturing());
+        let state = SharedState::with_recorder("op-pivot".to_string(), recorder.clone());
+        let queue = TaskQueueCore::from_connection(MockRedisConnection::new());
+
+        let vuln_id = "mssql_linked_server_192.168.58.51_SQL01";
+        credit_pivot_exploited(&state, &queue, vuln_id).await;
+
+        let inner = state.read().await;
+        assert!(inner.exploited_vulnerabilities.contains(vuln_id));
+        drop(inner);
+
+        let evs = recorder.captured().await;
+        assert!(evs.iter().any(|e| matches!(
+            &e.payload,
+            OpStateEventPayload::VulnExploited { vuln_id: v, .. } if v == vuln_id
+        )));
+    }
+
     #[test]
     fn resolve_linked_server_host_ignores_empty_hostname() {
         // A host record with empty hostname must not match the empty leading
@@ -734,5 +904,153 @@ mod tests {
         });
         assert_eq!(resolve_linked_server_host_ip(&state, ""), None);
         assert_eq!(resolve_linked_server_host_ip(&state, "SQL01"), None);
+    }
+
+    // ── probe_failure_is_cross_forest_shape ────────────────────────────
+
+    #[test]
+    fn cross_forest_shape_matches_login_failed_for_user() {
+        // Classic cross-forest double-hop failure: SQL accepts the
+        // source-side connection then rejects the cross-link auth with
+        // a `Login failed for user '<domain>\<user>'` row.
+        let outcome = ProbeOutcome::ToolError(
+            "exit 1".into(),
+            "Msg 18456, Level 14, State 1\n\
+             Login failed for user 'FOREST1\\alice'."
+                .into(),
+        );
+        assert!(probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_matches_sspi_context() {
+        let outcome = ProbeOutcome::ToolError(
+            "exit 1".into(),
+            "OLE DB provider \"MSOLEDBSQL\" for linked server \"SQL02\" returned message \
+             \"Cannot generate SSPI context\"."
+                .into(),
+        );
+        assert!(probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_matches_sspi_handshake() {
+        let outcome = ProbeOutcome::ToolError(
+            "exit 1".into(),
+            "ERROR: SSPI handshake failed during NEGOTIATE phase".into(),
+        );
+        assert!(probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_matches_kdc_err() {
+        let outcome =
+            ProbeOutcome::ToolError("auth".into(), "krb5: KDC_ERR_S_PRINCIPAL_UNKNOWN".into());
+        assert!(probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_matches_no_evidence_with_sspi_log() {
+        // Tool exited 0 (impacket's mssqlclient.py can swallow some MSSQL
+        // errors into stdout) but stdout carries the SSPI trace — still
+        // worth retrying via OPENQUERY.
+        let outcome =
+            ProbeOutcome::NoEvidence("Connecting...\n[!] Cannot generate SSPI context\n".into());
+        assert!(probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_ignores_remote_query_disabled() {
+        // This is a server configuration error — `Server is not configured
+        // for RPC` — OPENQUERY does NOT help (OPENQUERY needs `data access`
+        // ON, not RPC OUT, but a server with RPC off may still have data
+        // access off too). Treat as non-cross-forest so the retry/abandon
+        // logic owns it.
+        let outcome = ProbeOutcome::ToolError(
+            "exit 1".into(),
+            "Msg 7411: Server 'SQL02' is not configured for RPC.".into(),
+        );
+        assert!(!probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_ignores_missing_linked_server() {
+        let outcome = ProbeOutcome::ToolError(
+            "exit 1".into(),
+            "Msg 7202: Could not find server 'SQLX' in sys.servers.".into(),
+        );
+        assert!(!probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_ignores_dispatch_failure() {
+        // Transport / queue error — no auth involved, OPENQUERY wouldn't
+        // help.
+        let outcome = ProbeOutcome::DispatchFailure("connection refused".into());
+        assert!(!probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_ignores_confirmed() {
+        // A confirmed result by definition isn't a failure shape.
+        let outcome = ProbeOutcome::Confirmed("who is_sa srv\n--- ----- ---\n...".into());
+        assert!(!probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    #[test]
+    fn cross_forest_shape_is_case_insensitive() {
+        // SQL Server's error capitalisation varies by version / locale; the
+        // matcher must lowercase before checking.
+        let outcome = ProbeOutcome::ToolError(
+            "auth".into(),
+            "LOGIN FAILED FOR USER 'FOREST1\\ALICE'".into(),
+        );
+        assert!(probe_failure_is_cross_forest_shape(&outcome));
+    }
+
+    // ── classify_probe_result (shared classifier path) ─────────────────
+
+    #[test]
+    fn classify_tool_error_propagates_error_and_output() {
+        let result: anyhow::Result<ares_llm::ToolExecResult> = Ok(ares_llm::ToolExecResult {
+            output: "Msg 18456 Login failed".into(),
+            error: Some("exit 1".into()),
+            discoveries: None,
+        });
+        let outcome = classify_probe_result(&result);
+        match outcome {
+            ProbeOutcome::ToolError(e, o) => {
+                assert_eq!(e, "exit 1");
+                assert!(o.contains("Login failed"));
+            }
+            other => panic!("expected ToolError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn classify_confirmed_when_probe_columns_present() {
+        let result: anyhow::Result<ares_llm::ToolExecResult> = Ok(ares_llm::ToolExecResult {
+            output: "who          is_sa  srv\n----         -----  ---\nFOREST2\\sa  1      SQL02"
+                .into(),
+            error: None,
+            discoveries: None,
+        });
+        assert!(matches!(
+            classify_probe_result(&result),
+            ProbeOutcome::Confirmed(_)
+        ));
+    }
+
+    #[test]
+    fn classify_no_evidence_when_clean_exit_but_no_probe_columns() {
+        let result: anyhow::Result<ares_llm::ToolExecResult> = Ok(ares_llm::ToolExecResult {
+            output: "SQL> EXEC (...)\n(0 rows affected)".into(),
+            error: None,
+            discoveries: None,
+        });
+        assert!(matches!(
+            classify_probe_result(&result),
+            ProbeOutcome::NoEvidence(_)
+        ));
     }
 }
