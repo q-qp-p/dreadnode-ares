@@ -896,9 +896,12 @@ tasks:
         export CARGO_BUILD_JOBS="{{.CARGO_BUILD_JOBS}}"
         echo -e "{{.INFO}} cargo build jobs: $CARGO_BUILD_JOBS"
 
-        # Cross-compile: prefer cargo-zigbuild (works on Apple Silicon),
-        # fall back to cross, then raw cargo
-        if command -v cargo-zigbuild >/dev/null 2>&1; then
+        # Cross-compile: prefer cross on macOS (aws-lc-sys breaks under
+        # zigbuild's Zig ar wrapper on Darwin), prefer zigbuild on Linux,
+        # fall back to raw cargo
+        if [ "$(uname)" = "Darwin" ] && command -v cross >/dev/null 2>&1; then
+          cross build --release --target {{.RUST_TARGET}}
+        elif command -v cargo-zigbuild >/dev/null 2>&1; then
           cargo zigbuild --release --target {{.RUST_TARGET}}
         elif command -v cross >/dev/null 2>&1; then
           cross build --release --target {{.RUST_TARGET}}

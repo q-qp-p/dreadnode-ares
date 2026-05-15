@@ -251,35 +251,80 @@ fn collect_adcs_work(state: &StateInner) -> Vec<AdcsWork> {
             } else {
                 None
             };
-            // Need at least a credential or an NTLM hash
-            if cred.is_none() && hash_pick.is_none() {
+            // Kerberos ticket fallback — when no same-forest plaintext cred
+            // or NTLM hash exists (common for a freshly-discovered foreign
+            // forest), a pre-forged inter-realm ccache is enough for
+            // certipy_find's LDAP bind. The credential_resolver injects the
+            // ticket for cross-forest tools; we just need a synthetic
+            // credential seeded with the ticket's identity so the resolver
+            // can match it. Dedup key uses the ticket's source domain so a
+            // single forge attempt doesn't permanently block later retries
+            // with a real cred if one lands in state.
+            let ticket_cred = if cred.is_none() && hash_pick.is_none() {
+                state
+                    .kerberos_tickets
+                    .iter()
+                    .find(|t| t.target_domain.to_lowercase() == domain_lower)
+                    .map(|t| {
+                        let dedup = format!(
+                            "{}:ticket:{}@{}",
+                            host_ip,
+                            t.username.to_lowercase(),
+                            t.source_domain.to_lowercase()
+                        );
+                        (
+                            dedup,
+                            ares_core::models::Credential {
+                                id: String::new(),
+                                username: t.username.clone(),
+                                password: String::new(),
+                                domain: t.source_domain.clone(),
+                                source: "kerberos_ticket".into(),
+                                is_admin: true,
+                                discovered_at: None,
+                                parent_id: None,
+                                attack_step: 0,
+                            },
+                        )
+                    })
+                    .filter(|(dedup, _)| !state.is_processed(DEDUP_ADCS_SERVERS, dedup))
+            } else {
+                None
+            };
+
+            // Need a cred, hash, or forged Kerberos ticket
+            if cred.is_none() && hash_pick.is_none() && ticket_cred.is_none() {
                 return None;
             }
 
-            let dedup_key = match (&cred, &hash_pick) {
-                (Some(c), _) => dedup_key_cred(&host_ip, c),
-                (None, Some(h)) => dedup_key_hash(&host_ip, h),
-                (None, None) => return None,
+            let (dedup_key, credential) = if let Some((dk, tc)) = ticket_cred {
+                (dk, tc)
+            } else {
+                let dk = match (&cred, &hash_pick) {
+                    (Some(c), _) => dedup_key_cred(&host_ip, c),
+                    (None, Some(h)) => dedup_key_hash(&host_ip, h),
+                    (None, None) => return None,
+                };
+                // Synthetic credential from the hash owner's identity when no
+                // cleartext cred is available; credential_resolver looks up the
+                // matching Hash record by (username, domain) and injects the
+                // `hash` arg, which `certipy_find` accepts via `-hashes`.
+                let c = cred.unwrap_or_else(|| {
+                    let h = hash_pick.as_ref().expect("guard above ensures one is Some");
+                    ares_core::models::Credential {
+                        id: String::new(),
+                        username: h.username.clone(),
+                        password: String::new(),
+                        domain: domain.clone(),
+                        source: "hash_fallback".into(),
+                        is_admin: false,
+                        discovered_at: None,
+                        parent_id: None,
+                        attack_step: 0,
+                    }
+                });
+                (dk, c)
             };
-
-            // Synthetic credential from the hash owner's identity when no
-            // cleartext cred is available; credential_resolver looks up the
-            // matching Hash record by (username, domain) and injects the
-            // `hash` arg, which `certipy_find` accepts via `-hashes`.
-            let credential = cred.unwrap_or_else(|| {
-                let h = hash_pick.as_ref().expect("guard above ensures one is Some");
-                ares_core::models::Credential {
-                    id: String::new(),
-                    username: h.username.clone(),
-                    password: String::new(),
-                    domain: domain.clone(),
-                    source: "hash_fallback".into(),
-                    is_admin: false,
-                    discovered_at: None,
-                    parent_id: None,
-                    attack_step: 0,
-                }
-            });
 
             Some(AdcsWork {
                 host_ip: host_ip.clone(),

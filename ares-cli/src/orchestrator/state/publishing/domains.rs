@@ -44,7 +44,9 @@ impl SharedState {
     /// - Auto-promotes when `evidence` is authoritative on its own.
     /// - For weaker evidence (`HostnameInference`), promotes only if the
     ///   candidate corroborates an existing strong source — matching the
-    ///   operation's `target.domain` or a domain already in `state.domains`.
+    ///   operation's `target.domain`, a domain already in `state.domains`,
+    ///   or sharing a suffix-parent that's already in `state.domains` (so a
+    ///   child like `child.contoso.local` rides on its known forest root).
     /// - Otherwise records the candidate for later confirmation.
     pub async fn publish_candidate_domain(
         &self,
@@ -79,7 +81,19 @@ impl SharedState {
                 .as_ref()
                 .map(|t| t.domain.eq_ignore_ascii_case(&fqdn))
                 .unwrap_or(false);
-            already_known || matches_target
+            // A multi-label child whose suffix-parent is already authoritative
+            // (e.g. `child.contoso.local` when `contoso.local` is known)
+            // inherits corroboration. FQDNs from host observation can't be
+            // typo-injected by an LLM the way credential realms can.
+            let parent_known = fqdn
+                .split_once('.')
+                .map(|(_, parent)| {
+                    !parent.is_empty()
+                        && parent.contains('.')
+                        && state.domains.iter().any(|d| d.eq_ignore_ascii_case(parent))
+                })
+                .unwrap_or(false);
+            already_known || matches_target || parent_known
         };
 
         if corroborated {
@@ -326,6 +340,48 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(outcome, DomainPublishOutcome::Promoted);
+    }
+
+    #[tokio::test]
+    async fn hostname_inference_promotes_child_of_known_forest_root() {
+        let state = SharedState::new("op-1".into());
+        let q = mock_queue();
+        {
+            let mut s = state.inner.write().await;
+            s.domains.push("contoso.local".into());
+        }
+        let outcome = state
+            .publish_candidate_domain(
+                &q,
+                "child.contoso.local",
+                DomainEvidence::HostnameInference,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(outcome, DomainPublishOutcome::Promoted);
+        let s = state.inner.read().await;
+        assert!(s.domains.iter().any(|d| d == "child.contoso.local"));
+    }
+
+    #[tokio::test]
+    async fn hostname_inference_does_not_promote_via_bare_tld_parent() {
+        let state = SharedState::new("op-1".into());
+        let q = mock_queue();
+        {
+            let mut s = state.inner.write().await;
+            s.domains.push("contoso.local".into());
+        }
+        let outcome = state
+            .publish_candidate_domain(
+                &q,
+                "evil.local",
+                DomainEvidence::HostnameInference,
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(outcome, DomainPublishOutcome::Held);
     }
 
     #[tokio::test]

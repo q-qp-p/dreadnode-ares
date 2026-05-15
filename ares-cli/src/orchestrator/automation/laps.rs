@@ -164,7 +164,8 @@ fn collect_laps_hash_sweep_work(state: &StateInner) -> Vec<LapsWork> {
     for h in state.hashes.iter().filter(|h| {
         !h.domain.is_empty()
             && h.hash_type.to_lowercase() == "ntlm"
-            && !h.hash_value.is_empty()
+            && h.hash_value.len() == 32
+            && h.hash_value.chars().all(|c| c.is_ascii_hexdigit())
             && !state.is_delegation_account(&h.username)
             && !state.is_principal_quarantined(&h.username, &h.domain)
     }) {
@@ -407,6 +408,9 @@ mod tests {
 
     // collect_laps_hash_sweep_work
 
+    const HASH_A: &str = "aad3b435b51404eeaad3b435b51404ee"; // pragma: allowlist secret
+    const HASH_B: &str = "31d6cfe0d16ae931b73c59d7e0c089c0"; // pragma: allowlist secret
+
     fn ntlm_hash(username: &str, domain: &str, value: &str) -> ares_core::models::Hash {
         ares_core::models::Hash {
             id: String::new(),
@@ -438,14 +442,14 @@ mod tests {
     fn laps_hash_sweep_emits_work_item_for_valid_ntlm_hash() {
         let mut s = state_with_dc("contoso.local", "192.168.58.10");
         s.hashes
-            .push(ntlm_hash("alice", "contoso.local", "abcd1234"));
+            .push(ntlm_hash("alice", "contoso.local", HASH_A));
 
         let work = collect_laps_hash_sweep_work(&s);
         assert_eq!(work.len(), 1);
         let item = &work[0];
         assert_eq!(item.domain, "contoso.local");
         assert_eq!(item.dc_ip.as_deref(), Some("192.168.58.10"));
-        assert_eq!(item.nt_hash.as_deref(), Some("abcd1234"));
+        assert_eq!(item.nt_hash.as_deref(), Some(HASH_A));
         assert_eq!(item.credential.username, "alice");
         assert_eq!(item.credential.password, "");
         assert_eq!(item.credential.source, "hash_fallback");
@@ -474,6 +478,29 @@ mod tests {
     fn laps_hash_sweep_skips_empty_hash_value() {
         let mut s = state_with_dc("contoso.local", "192.168.58.10");
         s.hashes.push(ntlm_hash("alice", "contoso.local", ""));
+        assert!(collect_laps_hash_sweep_work(&s).is_empty());
+    }
+
+    #[test]
+    fn laps_hash_sweep_skips_invalid_length_hash() {
+        // Truncated or otherwise malformed hashes (e.g. 33-char artefact from
+        // a colon-prefixed relay capture) must be rejected before dispatch so
+        // the tool doesn't fail with "Invalid NTLM hash length".
+        let mut s = state_with_dc("contoso.local", "192.168.58.10");
+        s.hashes
+            .push(ntlm_hash("alice", "contoso.local", "abcd1234"));
+        assert!(collect_laps_hash_sweep_work(&s).is_empty());
+    }
+
+    #[test]
+    fn laps_hash_sweep_skips_non_hex_hash() {
+        let mut s = state_with_dc("contoso.local", "192.168.58.10");
+        // 32 chars but contains non-hex characters
+        s.hashes.push(ntlm_hash(
+            "alice",
+            "contoso.local",
+            "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        ));
         assert!(collect_laps_hash_sweep_work(&s).is_empty());
     }
 
@@ -539,7 +566,7 @@ mod tests {
         // emitted.
         let mut s = state_with_dc("contoso.local", "192.168.58.10");
         s.hashes
-            .push(ntlm_hash("Alice", "CONTOSO.LOCAL", "abcd1234"));
+            .push(ntlm_hash("Alice", "CONTOSO.LOCAL", HASH_A));
         let work = collect_laps_hash_sweep_work(&s);
         assert_eq!(work.len(), 1);
         assert_eq!(work[0].dedup_key, "laps_extract:sweep:contoso.local:alice");
@@ -549,8 +576,8 @@ mod tests {
     fn laps_hash_sweep_emits_one_item_per_eligible_hash() {
         let mut s = state_with_dc("contoso.local", "192.168.58.10");
         s.hashes
-            .push(ntlm_hash("alice", "contoso.local", "abcd1234"));
-        s.hashes.push(ntlm_hash("bob", "contoso.local", "deadbeef"));
+            .push(ntlm_hash("alice", "contoso.local", HASH_A));
+        s.hashes.push(ntlm_hash("bob", "contoso.local", HASH_B));
         let work = collect_laps_hash_sweep_work(&s);
         assert_eq!(work.len(), 2);
     }
