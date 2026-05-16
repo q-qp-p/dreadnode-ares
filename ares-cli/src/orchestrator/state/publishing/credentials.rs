@@ -1009,20 +1009,15 @@ mod tests {
 
         // 33 chars — relay artifact
         let bad = make_hash(
-            "robb.stark",
-            "north.sevenkingdoms.local",
+            "jdoe",
+            "child.contoso.local",
             "NTLM",
             "aad3b435b51404eeaad3b435b51404ee0",
         ); // pragma: allowlist secret
         assert!(!state.publish_hash(&q, bad).await.unwrap());
 
         // 8 chars — truncated capture
-        let short = make_hash(
-            "robb.stark",
-            "north.sevenkingdoms.local",
-            "NTLM",
-            "aabbccdd",
-        );
+        let short = make_hash("jdoe", "child.contoso.local", "NTLM", "aabbccdd");
         assert!(!state.publish_hash(&q, short).await.unwrap());
 
         let s = state.inner.read().await;
